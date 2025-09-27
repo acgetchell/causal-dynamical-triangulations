@@ -23,7 +23,7 @@ fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Vertex"));
+        .stdout(predicate::str::contains("Triangle"));
 
     Ok(())
 }

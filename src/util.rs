@@ -1,11 +1,8 @@
-use rand::Rng;
+use rand::random;
 
+#[must_use]
 pub fn generate_random_float() -> f64 {
-    let mut rng = rand::thread_rng();
-
-    let result: f64 = rng.gen();
-
-    result
+    random::<f64>()
 }
 
 #[cfg(test)]

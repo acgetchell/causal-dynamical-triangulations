@@ -1,10 +1,6 @@
-use cdt_rs::Config;
+use causal_dynamical_triangulations::Config;
 
 fn main() {
     let config = Config::build();
-
-    if let Err(e) = cdt_rs::run(&config) {
-        eprintln!("Application error: {}", e);
-        std::process::exit(1);
-    }
+    let _triangulation = causal_dynamical_triangulations::run(&config);
 }

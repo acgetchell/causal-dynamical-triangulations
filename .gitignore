@@ -1,2 +1,26 @@
 /target
 .vscode/
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+
+# Spell check cache
+.cspellcache
+
+# ---- Python (scripts/tools only) ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+.env/
+
+# Packaging/build metadata
+*.egg-info/
+*.egg
+dist/
+build/

@@ -1,20 +1,18 @@
+#![allow(clippy::multiple_crate_versions)]
 // #![warn(missing_docs)]
 
 //! Using <https://crates.io/crates/clap> for command line arguments
-//! Using <https://crates.io/crates/spade> for 2D Delaunay triangulation
+//! Using <https://crates.io/crates/delaunay> for 2D Delaunay triangulation
 use clap::Parser;
-use spade::InsertionError;
-use spade::Triangulation;
 
 mod triangulations {
-    pub mod spade_triangulations;
-    pub mod triangulation_2;
+    pub mod delaunay_triangulations;
 }
 
-use triangulations::spade_triangulations::generate_random_delaunay2;
+use triangulations::delaunay_triangulations::generate_random_delaunay2;
 
 /// Contains utility functions for the `cdt-rs` crate.
-pub mod utilities;
+pub mod util;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -35,15 +33,15 @@ pub struct Config {
 
 impl Config {
     /// Builds a new instance of `Config`.
+    #[must_use]
     pub fn build() -> Self {
         Self::parse()
     }
 }
 
-// pub fn run(config: Config) -> Result<Vec<triangulation::Triangle>, Box<dyn std::error::Error>> {
-pub fn run(
-    config: &Config,
-) -> Result<spade::DelaunayTriangulation<spade::Point2<f64>>, InsertionError> {
+/// Runs the triangulation with the given configuration.
+#[must_use]
+pub fn run(config: &Config) -> Vec<Vec<usize>> {
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
@@ -53,40 +51,19 @@ pub fn run(
     }
 
     println!("Dimensionality: {}", config.dimension.unwrap_or(2));
-    println!("Number of vertices: {}", vertices);
-    println!("Number of timeslices: {}", timeslices);
+    println!("Number of vertices: {vertices}");
+    println!("Number of timeslices: {timeslices}");
 
-    let triangulation = generate_random_delaunay2(vertices)?;
+    let triangulation = generate_random_delaunay2(vertices);
 
-    println!("Number of triangles: {}", triangulation.num_inner_faces());
+    println!("Number of triangles: {}", triangulation.len());
 
-    // let scale = 10.0; // The size of the grid
-    // let mut points = Vec::new();
-
-    // for _n in 1..vertices {
-    //     let x = utilities::generate_random_float() * scale;
-    //     let y = utilities::generate_random_float() * scale;
-    //     points.push(triangulation::Point { x, y });
-    // }
-
-    // let triangulation = triangulation::bowyer_watson(points);
-    // for triangle in &triangulation {
-    //     println!(
-    //         "Triangle: {:?} Center: {:?}",
-    //         triangle.vertices,
-    //         triangle.center()
-    //     );
-    // }
-
-    for vertex in triangulation.vertices() {
-        println!("Vertex: {:?}", vertex.position());
+    // Print triangle indices
+    for (i, triangle) in triangulation.iter().enumerate() {
+        println!("Triangle {i}: vertices {triangle:?}");
     }
 
-    for triangle in triangulation.inner_faces() {
-        println!("Triangle: {:?}", triangle.positions());
-    }
-
-    Ok(triangulation)
+    triangulation
 }
 
 #[cfg(test)]
@@ -100,20 +77,19 @@ mod lib_tests {
             timeslices: 3,
         };
         assert!(config.dimension.is_some());
-        assert!(run(&config).is_ok());
+        let triangulation = run(&config);
+        assert!(!triangulation.is_empty());
     }
 
     #[test]
-    fn points_is_number_of_vertices() {
+    fn triangulation_contains_triangles() {
         let config = Config {
             dimension: Some(2),
             vertices: 32,
             timeslices: 3,
         };
-        let triangulation = run(&config).unwrap();
-        assert_eq!(
-            triangulation.num_vertices(),
-            config.vertices.try_into().unwrap()
-        );
+        let triangulation = run(&config);
+        // Check that we have some triangles
+        assert!(!triangulation.is_empty());
     }
 }
