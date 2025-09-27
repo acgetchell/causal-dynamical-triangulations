@@ -48,7 +48,7 @@ validate-json:
     git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
 
 validate-toml:
-    git ls-files -z '*.toml' | xargs -0 -r -I {} uv run python -c "import tomllib; tomllib.load(open('{}', 'rb')); print('{} is valid TOML')"
+    git ls-files -z '*.toml' | xargs -0 -r -I {} sh -c 'cd scripts && uv run python -c "import tomllib; tomllib.load(open(\"../{}\", \"rb\")); print(\"{} is valid TOML\")"'
 
 # Comprehensive quality check
 quality: fmt clippy doc-check shell-lint markdown-lint spell-check validate-json validate-toml
