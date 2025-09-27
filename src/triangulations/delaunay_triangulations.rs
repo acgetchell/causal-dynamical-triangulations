@@ -1,5 +1,19 @@
 use crate::util::generate_random_float;
 
+#[must_use]
+/// Generates a random Delaunay triangulation with the specified number of vertices.
+///
+/// This is currently a placeholder implementation that creates a simple triangulation
+/// by connecting consecutive points. A proper Delaunay triangulation algorithm
+/// will be implemented once the delaunay crate API is integrated.
+///
+/// # Arguments
+///
+/// * `number_of_vertices` - The number of vertices to include in the triangulation
+///
+/// # Returns
+///
+/// A vector of triangles, where each triangle is represented as a vector of vertex indices.
 pub fn generate_random_delaunay2(number_of_vertices: u32) -> Vec<Vec<usize>> {
     let mut points = Vec::new();
 
