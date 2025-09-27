@@ -1,3 +1,8 @@
+//! Command-line interface integration tests for the CDT-RS application.
+//!
+//! This module contains tests that verify the behavior of the command-line
+//! interface, including argument validation, success scenarios, and error handling.
+
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;

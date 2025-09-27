@@ -1,5 +1,10 @@
 use rand::random;
 
+/// Generates a random floating-point number between 0.0 and 1.0.
+///
+/// # Returns
+///
+/// A random `f64` value in the range [0.0, 1.0).
 #[must_use]
 pub fn generate_random_float() -> f64 {
     random::<f64>()
