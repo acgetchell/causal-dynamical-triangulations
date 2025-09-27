@@ -8,6 +8,9 @@
 # Spell check cache
 .cspellcache
 
+# Codacy local configuration
+.codacy/
+
 # ---- Python (scripts/tools only) ----
 __pycache__/
 *.py[cod]

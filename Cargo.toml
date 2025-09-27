@@ -1,14 +1,16 @@
 [package]
 name = "causal-dynamical-triangulations"
 version = "0.1.0"
-authors = ["Adam Getchell <adam@adamgetchell.org>"]
 edition = "2024"
-description = "Causal Dynamical Triangulations"
-readme = "README.md"
-license = "BSD-3-Clause"
+rust-version = "1.90.0"
+authors = ["Adam Getchell <adam@adamgetchell.org>"]
+homepage = "https://github.com/acgetchell/causal-dynamical-triangulations"
 repository = "https://github.com/acgetchell/causal-dynamical-triangulations"
-keywords = ["triangulation", "delaunay", "computational-geometry", "physics", "causal"]
-categories = ["science", "mathematics", "algorithms"]
+description = "Causal Dynamical Triangulations in d-dimensions"
+license = "BSD-3-Clause"
+keywords = ["quantum", "gravity", "spacetime", "simulation", "triangulation", "physics", "causal"]
+categories = ["science", "mathematics", "algorithms", "simulation"]
+readme = "README.md"
 
 [[bin]]
 name = "cdt-rs"

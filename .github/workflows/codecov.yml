@@ -1,60 +1,132 @@
+name: Codecov
+concurrency:
+  # This concurrency group ensures that only one Codecov analysis runs at a time
+  group: codecov-${{ github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ["main"]
   pull_request:
-    # Run on merged pull requests
-    types: [ closed ]
-  workflow_dispatch:
+    branches: ["main"]
 
-name: Codecov
+# Least-privilege permissions
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 jobs:
-  check:
-    name: Codecov via tarpaulin
+  coverage:
+    name: Code Coverage
     runs-on: ubuntu-latest
+    env:
+      TARPAULIN_VERSION: "0.32.8"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - uses: Swatinem/rust-cache@v2
-
-      # - name: Install stable toolchain
-      #   uses: actions-rs/toolchain@v1
-      #   with:
-      #     toolchain: stable
-      #     override: true
-
-      # - name: Run cargo-tarpaulin
-      #   uses: actions-rs/tarpaulin@v0.1
-      #   with:
-      #     version: '0.15.0'
-      #     args: '-- --test-threads 1'
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
-          toolchain: stable
-      
+          fetch-depth: 0  # Needed for codecov to analyze diff
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@2fcdc490d667999e01ddbbf0f2823181beef6b39  # v1.15.0
+        with:
+          cache: true
+          # toolchain, components, etc. are specified in rust-toolchain.toml
+
+      - name: Cache tarpaulin
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809  # v4.2.4
+        with:
+          path: ~/.cargo/bin/cargo-tarpaulin
+          key: tarpaulin-${{ runner.os }}-${{ env.TARPAULIN_VERSION }}
+          restore-keys: |
+            tarpaulin-${{ runner.os }}-
+
       - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      # - name: Install kani
-      #   run: |
-      #     cargo install kani-verifier
-      #     cargo kani setup
-
-      - name: Run tarpaulin
         run: |
-          # export VAR=var
-          cargo tarpaulin --out Xml -- --test-threads=1
-      
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+          if ! command -v cargo-tarpaulin &> /dev/null; then
+            cargo install cargo-tarpaulin --locked --version "${TARPAULIN_VERSION}"
+          fi
+
+      - name: Run coverage
+        run: |
+          # Create coverage directory with proper permissions
+          mkdir -p coverage
+          chmod 755 coverage
+
+          echo "::debug::Current directory: $(pwd)"
+          echo "::debug::Coverage directory permissions: $(ls -ld coverage)"
+          # Tarpaulin configuration (explicit arguments):
+          # - XML output: --out Xml
+          # - Output directory: --output-dir coverage
+          # - Exclusions: --exclude-files "benches/*" "examples/*"
+          # - All features: --all-features
+          # - Workspace: --workspace
+          # - Timeout: --timeout 120
+          # - Verbose: --verbose
+          # - Implicit test threads: --implicit-test-threads
+          echo "::group::Running tarpaulin"
+          # Use explicit arguments for reliability (config file approach has issues)
+          cargo tarpaulin \
+            --out Xml \
+            --output-dir coverage \
+            --exclude-files "benches/*" "examples/*" \
+            --all-features \
+            --workspace \
+            --timeout 120 \
+            --verbose \
+            --implicit-test-threads
+          echo "::endgroup::"
+
+          # Detailed sanity check: verify coverage report was generated
+          echo "::group::Coverage verification"
+          echo "Directory listing:"
+          ls -la coverage/ || echo "Coverage directory not found"
+
+          printf "\nSearching for XML files:\n"
+          find . -name "*.xml" -type f -ls 2>/dev/null || echo "No XML files found"
+
+          printf "\nSearching for cobertura files:\n"
+          find . -name "*cobertura*" -type f -ls 2>/dev/null || echo "No cobertura files found"
+
+          if [ ! -f coverage/cobertura.xml ]; then
+            echo "::error::coverage/cobertura.xml not found. Tarpaulin failed to generate XML output."
+            echo "::error::Check tarpaulin logs above for errors."
+            exit 2
+          else
+            echo "::notice::Coverage report generated successfully: $(wc -l < coverage/cobertura.xml) lines"
+          fi
+          # Sanity: ensure benches/examples aren't present (defense-in-depth with .codecov.yml)
+          if rg -n '(^|/)(benches|examples)/' coverage/cobertura.xml; then
+            echo "::warning::benches/ or examples/ paths detected in coverage report"
+          fi
+          echo "::endgroup::"
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Upload coverage to Codecov
+        if: ${{ success() && hashFiles('coverage/cobertura.xml') != '' }}
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7  # v5.5.1
+        with:
+          files: coverage/cobertura.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v3
+      - name: Upload coverage to Codacy
+        if: ${{ success() && hashFiles('coverage/cobertura.xml') != '' }}
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699  # v1.3.0
         with:
-          name: code-coverage-report
-          path: cobertura.xml
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: coverage/cobertura.xml
+          language: rust
+        continue-on-error: true
+
+      - name: Archive coverage results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
