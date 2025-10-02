@@ -143,6 +143,7 @@ dependencies = [
  "float-ord",
  "predicates",
  "rand 0.9.2",
+ "serde",
 ]
 
 [[package]]

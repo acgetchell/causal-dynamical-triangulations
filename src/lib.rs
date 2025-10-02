@@ -40,17 +40,15 @@ pub mod cdt {
 
 /// Triangulation data structures and algorithms.
 pub mod triangulations {
-    /// Core triangulation data structures.
-    pub mod causal;
-    /// Delaunay triangulation generation functions.
-    pub mod delaunay_triangulations;
+    /// Unified triangulation module with generic Tds support.
+    pub mod triangulation;
 }
 
 // Re-exports for convenience
 pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResults};
-pub use triangulations::causal::CausalTriangulation;
+pub use triangulations::triangulation::{CausalTriangulation, CausalTriangulation2D};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -154,7 +152,7 @@ pub fn run(config: &Config) -> SimulationResults {
         let action_config = config.to_action_config();
 
         let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-        let results = algorithm.run_simulation(triangulation.triangles().clone());
+        let results = algorithm.run_simulation(triangulation.triangles());
 
         println!("Simulation Results:");
         println!(
@@ -187,7 +185,7 @@ pub fn run(config: &Config) -> SimulationResults {
                 triangles: u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
             }],
             elapsed_time: Duration::from_millis(0),
-            final_triangulation: triangulation.triangles().clone(),
+            final_triangulation: triangulation.triangles(),
         }
     }
 }
