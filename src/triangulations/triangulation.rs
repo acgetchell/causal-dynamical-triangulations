@@ -102,6 +102,31 @@ where
 // Specific implementation for 2D triangulations
 impl CausalTriangulation2D {
     /// Creates a new 2D causal triangulation.
+    ///
+    /// # Arguments
+    ///
+    /// * `vertices` - Number of vertices in the triangulation (must be >= 3)
+    /// * `time_slices` - Number of time slices in the foliation
+    /// * `dimension` - Dimension of the triangulation (should be 2)
+    ///
+    /// # Returns
+    ///
+    /// An `Option<CausalTriangulation2D>` containing the triangulation if successful.
+    /// Returns `None` if triangulation generation fails due to invalid parameters.
+    #[must_use]
+    pub fn try_new(vertices: u32, time_slices: u32, dimension: u32) -> Option<Self> {
+        try_generate_random_delaunay2(vertices).map(|tds| Self {
+            tds,
+            time_slices,
+            dimension,
+        })
+    }
+
+    /// Creates a new 2D causal triangulation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying triangulation generation fails.
     #[must_use]
     pub fn new(vertices: u32, time_slices: u32, dimension: u32) -> Self {
         let tds = generate_random_delaunay2(vertices);
@@ -110,25 +135,6 @@ impl CausalTriangulation2D {
             time_slices,
             dimension,
         }
-    }
-
-    /// Returns triangulation data in a format compatible with legacy code.
-    ///
-    /// This method extracts triangle connectivity information from the Tds
-    /// and returns it as a vector of vertex index vectors for backward compatibility.
-    #[must_use]
-    pub fn triangles(&self) -> Vec<Vec<usize>> {
-        self.tds
-            .cells()
-            .iter()
-            .enumerate()
-            .map(|(i, _cell)| {
-                // For now, create simple triangular connectivity
-                // This is a simplified implementation - in practice you'd extract
-                // actual vertex indices from the cell structure
-                vec![i * 3, i * 3 + 1, i * 3 + 2]
-            })
-            .collect()
     }
 }
 
@@ -148,20 +154,52 @@ impl CausalTriangulation2D {
 /// # Panics
 ///
 /// This function panics if the random triangulation generation fails, which can happen
-/// if the number of vertices is invalid or if the coordinate generation fails.
-#[must_use]
-pub fn generate_random_delaunay2(number_of_vertices: u32) -> delaunay::core::Tds<f64, i32, i32, 2> {
-    generate_random_triangulation(number_of_vertices as usize, (0.0, 10.0), None, None).unwrap()
-}
-
-/// Generates a random vertex with coordinates within the given scale.
+/// if the number of vertices is invalid (< 3) or if the coordinate generation fails.
+/// Generates a random Delaunay triangulation with the specified number of vertices.
+///
+/// This function creates a proper Delaunay triangulation using the delaunay crate's
+/// utility functions. Returns `None` if triangulation generation fails.
 ///
 /// # Arguments
 ///
-/// * `scale` - The maximum coordinate value for x and y
+/// * `number_of_vertices` - The number of vertices to include in the triangulation
 ///
 /// # Returns
 ///
+/// An `Option<Tds>` containing the triangulation if successful, `None` otherwise.
+///
+/// # Errors
+///
+/// Returns `None` if the random triangulation generation fails, which can happen
+/// if the number of vertices is invalid (< 3) or if coordinate generation fails.
+#[must_use]
+pub fn try_generate_random_delaunay2(number_of_vertices: u32) -> Option<delaunay::core::Tds<f64, i32, i32, 2>> {
+    generate_random_triangulation(number_of_vertices as usize, (0.0, 10.0), None, None).ok()
+}
+
+/// Generates a random Delaunay triangulation with the specified number of vertices.
+///
+/// This function creates a proper Delaunay triangulation using the delaunay crate's
+/// utility functions.
+///
+/// # Arguments
+///
+/// * `number_of_vertices` - The number of vertices to include in the triangulation
+///
+/// # Returns
+///
+/// A Tds structure representing the Delaunay triangulation.
+///
+/// # Panics
+///
+/// This function panics if the random triangulation generation fails, which can happen
+/// if the number of vertices is invalid (< 3) or if the coordinate generation fails.
+#[must_use]
+pub fn generate_random_delaunay2(number_of_vertices: u32) -> delaunay::core::Tds<f64, i32, i32, 2> {
+    try_generate_random_delaunay2(number_of_vertices)
+        .unwrap_or_else(|| panic!("Failed to generate random Delaunay triangulation with {number_of_vertices} vertices"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,18 +245,6 @@ mod tests {
     }
 
     #[test]
-    fn test_triangles_extraction() {
-        let triangulation = CausalTriangulation2D::new(4, 1, 2);
-        let triangles = triangulation.triangles();
-
-        assert!(!triangles.is_empty());
-        // Each triangle should have 3 vertices
-        for triangle in triangles {
-            assert_eq!(triangle.len(), 3);
-        }
-    }
-
-    #[test]
     fn delaunay_triangulation_construction() {
         let triangulation = generate_random_delaunay2(3);
 
@@ -229,7 +255,6 @@ mod tests {
 }
 
 #[cfg(kani)]
-#[cfg(not(tarpaulin_include))]
 mod verification {
     use super::*;
 

@@ -1,5 +1,5 @@
 #![allow(clippy::multiple_crate_versions)]
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 //! Causal Dynamical Triangulations library for quantum gravity simulations.
 //!
@@ -128,8 +128,21 @@ impl Config {
 ///
 /// This function can either generate a simple triangulation or run a full CDT simulation
 /// depending on the `simulate` flag in the configuration.
+///
+/// # Arguments
+///
+/// * `config` - Configuration parameters for the triangulation/simulation
+///
+/// # Returns
+///
+/// A `SimulationResults` struct containing the results of the operation,
+/// including the final triangulation and any measurements taken.
+///
+/// # Panics
+///
+/// Panics if an unsupported dimension (not 2D) is specified in the configuration.
 #[must_use]
-pub fn run(config: &Config) -> SimulationResults {
+pub fn run(config: &Config) -> SimulationResults<f64, i32, i32, 2> {
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
@@ -152,7 +165,7 @@ pub fn run(config: &Config) -> SimulationResults {
         let action_config = config.to_action_config();
 
         let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-        let results = algorithm.run_simulation(triangulation.triangles());
+        let results = algorithm.run_simulation(triangulation.tds);
 
         println!("Simulation Results:");
         println!(
@@ -185,7 +198,7 @@ pub fn run(config: &Config) -> SimulationResults {
                 triangles: u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
             }],
             elapsed_time: Duration::from_millis(0),
-            final_triangulation: triangulation.triangles(),
+            final_triangulation: triangulation.tds,
         }
     }
 }
@@ -216,7 +229,7 @@ mod lib_tests {
         let config = create_test_config();
         assert!(config.dimension.is_some());
         let results = run(&config);
-        assert!(!results.final_triangulation.is_empty());
+        assert!(!results.final_triangulation.cells().is_empty());
         assert!(!results.measurements.is_empty());
     }
 
@@ -225,7 +238,7 @@ mod lib_tests {
         let config = create_test_config();
         let results = run(&config);
         // Check that we have some triangles
-        assert!(!results.final_triangulation.is_empty());
+        assert!(!results.final_triangulation.cells().is_empty());
     }
 
     #[test]
