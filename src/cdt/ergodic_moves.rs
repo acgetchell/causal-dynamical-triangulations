@@ -5,7 +5,9 @@
 //! - (1,3) moves: Add/remove vertex with triangle subdivision
 //! - Edge flips: Standard Delaunay edge flips maintaining causality
 
+use crate::errors::CdtError;
 use crate::util::generate_random_float;
+use num_traits::cast::NumCast;
 use rand::Rng;
 
 /// Types of ergodic moves available in 2D CDT.
@@ -31,7 +33,7 @@ pub enum MoveResult {
     /// Move was rejected due to geometric constraints
     GeometricViolation,
     /// Move was rejected for other reasons
-    Rejected(String),
+    Rejected(CdtError),
 }
 
 /// Statistics tracking for ergodic moves.
@@ -63,7 +65,7 @@ impl MoveStatistics {
     }
 
     /// Records an attempted move.
-    pub fn record_attempt(&mut self, move_type: MoveType) {
+    pub const fn record_attempt(&mut self, move_type: MoveType) {
         match move_type {
             MoveType::Move22 => self.moves_22_attempted += 1,
             MoveType::Move13Add => self.moves_13_attempted += 1,
@@ -73,7 +75,7 @@ impl MoveStatistics {
     }
 
     /// Records a successful move.
-    pub fn record_success(&mut self, move_type: MoveType) {
+    pub const fn record_success(&mut self, move_type: MoveType) {
         match move_type {
             MoveType::Move22 => self.moves_22_accepted += 1,
             MoveType::Move13Add => self.moves_13_accepted += 1,
@@ -83,6 +85,10 @@ impl MoveStatistics {
     }
 
     /// Calculates acceptance rate for a specific move type.
+    ///
+    /// # Panics
+    ///
+    /// This function should never panic as u64 to f64 conversion is always valid.
     #[must_use]
     pub fn acceptance_rate(&self, move_type: MoveType) -> f64 {
         let (attempted, accepted) = match move_type {
@@ -95,12 +101,17 @@ impl MoveStatistics {
         if attempted == 0 {
             0.0
         } else {
-            f64::from(u32::try_from(accepted).unwrap_or(u32::MAX))
-                / f64::from(u32::try_from(attempted).unwrap_or(u32::MAX))
+            <f64 as NumCast>::from(accepted).expect("u64 to f64 conversion should never fail")
+                / <f64 as NumCast>::from(attempted)
+                    .expect("u64 to f64 conversion should never fail")
         }
     }
 
     /// Calculates overall acceptance rate.
+    ///
+    /// # Panics
+    ///
+    /// This function should never panic as u64 to f64 conversion is always valid.
     #[must_use]
     pub fn total_acceptance_rate(&self) -> f64 {
         let total_attempted = self.moves_22_attempted
@@ -115,8 +126,9 @@ impl MoveStatistics {
         if total_attempted == 0 {
             0.0
         } else {
-            f64::from(u32::try_from(total_accepted).unwrap_or(u32::MAX))
-                / f64::from(u32::try_from(total_attempted).unwrap_or(u32::MAX))
+            <f64 as NumCast>::from(total_accepted).expect("u64 to f64 conversion should never fail")
+                / <f64 as NumCast>::from(total_attempted)
+                    .expect("u64 to f64 conversion should never fail")
         }
     }
 }

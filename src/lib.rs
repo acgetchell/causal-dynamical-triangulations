@@ -25,6 +25,9 @@
 use clap::Parser;
 
 // Module declarations (avoiding mod.rs files)
+/// Error types for the CDT library.
+pub mod errors;
+
 /// Utility functions for random number generation and mathematical operations.
 pub mod util;
 
@@ -48,6 +51,7 @@ pub mod triangulations {
 pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResults};
+pub use errors::{CdtError, CdtResult};
 pub use triangulations::triangulation::{CausalTriangulation, CausalTriangulation2D};
 
 #[derive(Parser)]
@@ -141,22 +145,27 @@ impl Config {
 /// # Panics
 ///
 /// Panics if an unsupported dimension (not 2D) is specified in the configuration.
-#[must_use]
-pub fn run(config: &Config) -> SimulationResults<f64, i32, i32, 2> {
+///
+/// # Errors
+///
+/// Returns [`CdtError::UnsupportedDimension`] if an invalid dimension is specified.
+/// Returns triangulation generation errors from the underlying triangulation creation.
+pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
-    if config.dimension.is_some_and(|d| d != 2) {
-        eprintln!("Only 2D triangulations are supported right now.");
-        std::process::exit(1);
+    if let Some(dim) = config.dimension
+        && dim != 2
+    {
+        panic!("{}", CdtError::UnsupportedDimension(dim));
     }
 
-    println!("Dimensionality: {}", config.dimension.unwrap_or(2));
-    println!("Number of vertices: {vertices}");
-    println!("Number of timeslices: {timeslices}");
+    log::info!("Dimensionality: {}", config.dimension.unwrap_or(2));
+    log::info!("Number of vertices: {vertices}");
+    log::info!("Number of timeslices: {timeslices}");
 
     // Create initial triangulation
-    let triangulation = CausalTriangulation::new(vertices, timeslices, 2);
+    let triangulation = CausalTriangulation::new(vertices, timeslices, 2)?;
     triangulation.print_summary();
 
     if config.simulate {
@@ -167,14 +176,14 @@ pub fn run(config: &Config) -> SimulationResults<f64, i32, i32, 2> {
         let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
         let results = algorithm.run_simulation(triangulation.tds);
 
-        println!("Simulation Results:");
-        println!(
+        log::info!("Simulation Results:");
+        log::info!(
             "  Acceptance rate: {:.2}%",
             results.acceptance_rate() * 100.0
         );
-        println!("  Average action: {:.3}", results.average_action());
+        log::info!("  Average action: {:.3}", results.average_action());
 
-        results
+        Ok(results)
     } else {
         // Just return basic simulation results with the triangulation
         use cdt::metropolis::Measurement;
@@ -186,7 +195,7 @@ pub fn run(config: &Config) -> SimulationResults<f64, i32, i32, 2> {
             u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
         );
 
-        SimulationResults {
+        Ok(SimulationResults {
             config: config.to_metropolis_config(),
             action_config: config.to_action_config(),
             steps: vec![],
@@ -199,7 +208,7 @@ pub fn run(config: &Config) -> SimulationResults<f64, i32, i32, 2> {
             }],
             elapsed_time: Duration::from_millis(0),
             final_triangulation: triangulation.tds,
-        }
+        })
     }
 }
 
@@ -228,7 +237,7 @@ mod lib_tests {
     fn test_run() {
         let config = create_test_config();
         assert!(config.dimension.is_some());
-        let results = run(&config);
+        let results = run(&config).expect("Failed to run triangulation");
         assert!(!results.final_triangulation.cells().is_empty());
         assert!(!results.measurements.is_empty());
     }
@@ -236,7 +245,7 @@ mod lib_tests {
     #[test]
     fn triangulation_contains_triangles() {
         let config = create_test_config();
-        let results = run(&config);
+        let results = run(&config).expect("Failed to run triangulation");
         // Check that we have some triangles
         assert!(!results.final_triangulation.cells().is_empty());
     }

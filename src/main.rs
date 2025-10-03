@@ -6,6 +6,17 @@
 use causal_dynamical_triangulations::{Config, run};
 
 fn main() {
+    // Initialize logging
+    env_logger::init();
+
     let config = Config::build();
-    let _results = run(&config);
+    match run(&config) {
+        Ok(_results) => {
+            log::info!("CDT simulation completed successfully");
+        }
+        Err(e) => {
+            log::error!("CDT simulation failed: {e}");
+            std::process::exit(1);
+        }
+    }
 }

@@ -99,7 +99,7 @@ coverage:
     @echo "📊 Coverage report generated: target/tarpaulin/tarpaulin-report.html"
 
 # Pre-commit workflow (recommended before pushing)
-pre-commit: quality test-all
+check: quality test-all
     @echo "🚀 Ready to commit! All checks passed."
 
 # CI simulation (run what CI runs)
@@ -120,7 +120,7 @@ clean:
 help-workflows:
     @echo "Common Just workflows:"
     @echo "  just dev           # Quick development cycle (format, lint, test)"
-    @echo "  just pre-commit    # Full pre-commit checks"
+    @echo "  just check         # Full pre-commit checks"
     @echo "  just ci            # Simulate CI pipeline"
     @echo "  just quality       # All quality checks"
     @echo "  just test-all      # All tests"

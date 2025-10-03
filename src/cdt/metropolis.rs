@@ -5,8 +5,11 @@
 
 use crate::cdt::action::ActionConfig;
 use crate::cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
+use crate::errors::CdtError;
 use crate::util::generate_random_float;
 use delaunay::core::Tds;
+use delaunay::core::facet::AllFacetsIter;
+use std::collections::HashSet;
 use std::time::Instant;
 
 #[cfg(test)]
@@ -180,7 +183,7 @@ impl MetropolisAlgorithm {
     /// Runs the complete Monte Carlo simulation.
     pub fn run_simulation<T, VertexData, CellData, const D: usize>(
         &mut self,
-        mut triangulation: Tds<T, VertexData, CellData, D>,
+        triangulation: Tds<T, VertexData, CellData, D>,
     ) -> SimulationResults<T, VertexData, CellData, D>
     where
         T: delaunay::geometry::CoordinateScalar,
@@ -192,17 +195,17 @@ impl MetropolisAlgorithm {
         let mut steps = Vec::new();
         let mut measurements = Vec::new();
 
-        println!("Starting Metropolis-Hastings simulation...");
-        println!("Temperature: {}", self.config.temperature);
-        println!("Total steps: {}", self.config.steps);
-        println!("Thermalization steps: {}", self.config.thermalization_steps);
+        log::info!("Starting Metropolis-Hastings simulation...");
+        log::info!("Temperature: {}", self.config.temperature);
+        log::info!("Total steps: {}", self.config.steps);
+        log::info!("Thermalization steps: {}", self.config.thermalization_steps);
 
         // Calculate initial action
         let mut current_action = self.calculate_triangulation_action(&triangulation);
 
         for step_num in 0..self.config.steps {
             // Perform Monte Carlo step
-            let mc_step = self.monte_carlo_step(&mut triangulation, current_action, step_num);
+            let mc_step = self.monte_carlo_step(&triangulation, current_action, step_num);
 
             // Update current action if move was accepted
             if let Some(new_action) = mc_step.action_after {
@@ -225,15 +228,17 @@ impl MetropolisAlgorithm {
 
             // Progress reporting
             if step_num % 100 == 0 {
-                println!(
+                log::debug!(
                     "Step {}/{}, Action: {:.3}",
-                    step_num, self.config.steps, current_action
+                    step_num,
+                    self.config.steps,
+                    current_action
                 );
             }
         }
 
         let elapsed_time = start_time.elapsed();
-        println!("Simulation completed in {elapsed_time:.2?}");
+        log::info!("Simulation completed in {elapsed_time:.2?}");
 
         SimulationResults {
             config: self.config.clone(),
@@ -248,7 +253,7 @@ impl MetropolisAlgorithm {
     /// Performs a single Monte Carlo step.
     fn monte_carlo_step<T, VertexData, CellData, const D: usize>(
         &mut self,
-        triangulation: &mut Tds<T, VertexData, CellData, D>,
+        triangulation: &Tds<T, VertexData, CellData, D>,
         current_action: f64,
         step_num: u32,
     ) -> MonteCarloStep
@@ -261,7 +266,9 @@ impl MetropolisAlgorithm {
         // Select and attempt a random move
         let move_type = self.ergodics.select_random_move();
         // For now, just return a placeholder since ergodic moves need to be adapted for Tds
-        let move_result = MoveResult::Rejected("Tds-based moves not yet implemented".to_string());
+        let move_result = MoveResult::Rejected(CdtError::ErgodicsFailure(
+            "Tds-based moves not yet implemented".to_string(),
+        ));
 
         let mut mc_step = MonteCarloStep {
             step: step_num,
@@ -322,6 +329,7 @@ impl MetropolisAlgorithm {
     }
 
     /// Counts the number of edges in the triangulation from a Tds.
+    /// Uses `AllFacetsIter` to iterate over all edges (facets) in the 2D triangulation.
     #[must_use]
     fn count_edges_from_tds<T, VertexData, CellData, const D: usize>(
         triangulation: &Tds<T, VertexData, CellData, D>,
@@ -332,15 +340,31 @@ impl MetropolisAlgorithm {
         CellData: delaunay::core::DataType,
         [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
     {
-        // Use Euler's formula: E = V + F - 2 for planar graphs (2D case)
-        // For higher dimensions, this would need adjustment
-        let vertices = triangulation.vertices().len();
-        let faces = triangulation.cells().len();
-        if vertices >= 2 && faces > 0 {
-            u32::try_from(vertices + faces - 2).unwrap_or_default()
-        } else {
-            0
+        if triangulation.vertices().len() < 2 || triangulation.cells().is_empty() {
+            return 0;
         }
+
+        // Use AllFacetsIter to iterate over all facets (edges in 2D)
+        // and count unique edges by tracking vertex pairs
+        let mut unique_edges = HashSet::new();
+        let all_facets = AllFacetsIter::new(triangulation);
+
+        for facet_view in all_facets {
+            // Get the vertices of this facet (edge in 2D)
+            if let Ok(vertices_iter) = facet_view.vertices() {
+                let vertices: Vec<_> = vertices_iter.collect();
+                if vertices.len() == 2 {
+                    // Use UUID for unique vertex identification
+                    let uuid1 = vertices[0].uuid();
+                    let uuid2 = vertices[1].uuid();
+                    let mut edge = [uuid1, uuid2];
+                    edge.sort();
+                    unique_edges.insert(edge);
+                }
+            }
+        }
+
+        u32::try_from(unique_edges.len()).unwrap_or_default()
     }
 }
 
@@ -371,10 +395,18 @@ mod tests {
         assert!(triangle_count > 0);
         assert!(edge_count > 0);
 
-        // For a valid triangulation, verify Euler's formula approximately holds
-        // E = V + F - 2 for planar graphs (this is what our count_edges_from_tds uses)
-        let expected_edges = vertex_count + triangle_count - 2;
-        assert_eq!(edge_count as usize, expected_edges);
+        // For a valid 2D triangulation, verify Euler's formula: T - E + V = 2
+        // Rearranged: E = V + T - 2
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let euler_check = triangle_count as i32 - edge_count as i32 + vertex_count as i32;
+
+        // For a planar graph with boundary (not a closed surface), Euler's formula gives:
+        // χ = V - E + F = 1 (for a disk topology)
+        // Rearranged as: F - E + V = 1, or in our case: T - E + V = 1
+        assert_eq!(
+            euler_check, 1,
+            "Euler's formula T - E + V = 1 failed for planar graph with boundary: {triangle_count} - {edge_count} + {vertex_count} = {euler_check} (expected 1)"
+        );
     }
 
     #[test]
