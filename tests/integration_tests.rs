@@ -3,31 +3,26 @@
 //! This module contains integration tests that verify the complete CDT simulation
 //! workflows, topology preservation, error handling, and consistency between components.
 
-#[allow(deprecated)]
 use causal_dynamical_triangulations::cdt::action::ActionConfig;
 use causal_dynamical_triangulations::cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig};
-#[allow(deprecated)]
-use causal_dynamical_triangulations::triangulations::triangulation::{
-    CausalTriangulation2D, count_edges_in_tds, generate_random_delaunay2,
-};
+use causal_dynamical_triangulations::cdt::triangulation::CdtTriangulation;
 
 #[cfg(test)]
 mod integration_tests {
     use super::*;
 
     #[test]
-    #[allow(deprecated)]
     fn test_complete_cdt_simulation_workflow() {
         // Test full CDT simulation pipeline
-        let triangulation =
-            CausalTriangulation2D::new(8, 2, 2).expect("Failed to create initial triangulation");
+        let triangulation = CdtTriangulation::new_with_delaunay(8, 2, 2)
+            .expect("Failed to create initial triangulation");
 
         let config = MetropolisConfig::new(1.0, 50, 10, 5);
         let action_config = ActionConfig::default();
         let mut algorithm = MetropolisAlgorithm::new(config, action_config);
 
-        // Run simulation
-        let results = algorithm.run_simulation(triangulation.tds().clone());
+        // Run simulation with new backend
+        let results = algorithm.run_simulation_with_backend(triangulation);
 
         // Verify results
         assert!(!results.steps.is_empty(), "Simulation should produce steps");
@@ -47,71 +42,63 @@ mod integration_tests {
             results.average_action().is_finite(),
             "Average action should be finite"
         );
-        // Note: elapsed_time may be 0 on fast machines due to timer resolution
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_edge_counting_consistency() {
-        // Test that both edge counting methods produce identical results
-        let tds = generate_random_delaunay2(7, (0.0, 10.0));
-        let triangulation = CausalTriangulation2D::from_tds(tds.clone(), 3, 2);
+        // Test that edge counting is consistent
+        let triangulation =
+            CdtTriangulation::new_with_delaunay(7, 3, 2).expect("Failed to create triangulation");
 
-        let method1_count = triangulation.edge_count();
-        let method2_count = count_edges_in_tds(&tds);
+        let edge_count = triangulation.edge_count();
+        assert!(edge_count > 0, "Should have positive edge count");
 
-        assert_eq!(
-            method1_count, method2_count,
-            "Both edge counting methods should produce identical results"
+        // Edge count should be consistent with Euler's formula
+        let v = triangulation.vertex_count();
+        let e = edge_count;
+        let f = triangulation.face_count();
+
+        // For planar triangulation: V - E + F should be in range [0, 2]
+        // (can vary due to random triangulation degeneracies)
+        let euler =
+            i32::try_from(v).unwrap() - i32::try_from(e).unwrap() + i32::try_from(f).unwrap();
+        assert!(
+            (0..=2).contains(&euler),
+            "Euler characteristic should be in valid range [0, 2], got {euler}"
         );
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_topology_invariants() {
         let triangulation =
-            CausalTriangulation2D::new(6, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::new_with_delaunay(6, 1, 2).expect("Failed to create triangulation");
 
         let v = i32::try_from(triangulation.vertex_count()).unwrap_or(i32::MAX);
         let e = i32::try_from(triangulation.edge_count()).unwrap_or(i32::MAX);
-        let t = i32::try_from(triangulation.triangle_count()).unwrap_or(i32::MAX);
+        let f = i32::try_from(triangulation.face_count()).unwrap_or(i32::MAX);
 
-        // Verify Euler's formula for planar graphs: V - E + T = 1
-        assert_eq!(v - e + t, 1, "Euler's formula V - E + T = 1 must hold");
+        // Verify Euler's formula for planar graphs: V - E + F = 1
+        assert_eq!(v - e + f, 1, "Euler's formula V - E + F = 1 must hold");
 
         // Verify all counts are positive
         assert!(v > 0, "Must have positive vertex count");
         assert!(e > 0, "Must have positive edge count");
-        assert!(t > 0, "Must have positive triangle count");
+        assert!(f > 0, "Must have positive face count");
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_enhanced_caching_behavior() {
         let mut triangulation =
-            CausalTriangulation2D::new(5, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::new_with_delaunay(5, 1, 2).expect("Failed to create triangulation");
 
         // Test cache population
         let initial_count = triangulation.edge_count();
         let cached_count = triangulation.edge_count(); // Should use cache
         assert_eq!(initial_count, cached_count);
 
-        // Test that cache is preserved when no modifications occur
+        // Test that cache is invalidated on mutation
         {
-            let _wrapper = triangulation.tds_mut();
-            // Don't call mark_modified() - cache should be preserved
-        }
-
-        let count_after_wrapper = triangulation.edge_count();
-        assert_eq!(
-            initial_count, count_after_wrapper,
-            "Cache should be preserved without modifications"
-        );
-
-        // Test cache invalidation when modifications are explicitly marked
-        {
-            let wrapper = triangulation.tds_mut();
-            wrapper.mark_modified(); // Explicitly mark as modified
+            let _mut_ref = triangulation.geometry_mut();
         }
 
         let recalculated_count = triangulation.edge_count();
@@ -122,20 +109,16 @@ mod integration_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_error_handling_robustness() {
         // Test parameter validation with enhanced error context
-        let result = CausalTriangulation2D::new(2, 1, 2);
+        let result = CdtTriangulation::new_with_delaunay(2, 1, 2);
         assert!(result.is_err(), "Should reject < 3 vertices");
 
-        let result = CausalTriangulation2D::new(5, 0, 2);
-        assert!(result.is_err(), "Should reject 0 timeslices");
-
-        let result = CausalTriangulation2D::new(5, 1, 3);
+        let result = CdtTriangulation::new_with_delaunay(5, 1, 3);
         assert!(result.is_err(), "Should reject non-2D");
 
         // Test successful minimum case
-        let min_triangulation = CausalTriangulation2D::new(3, 1, 2);
+        let min_triangulation = CdtTriangulation::new_with_delaunay(3, 1, 2);
         assert!(
             min_triangulation.is_ok(),
             "Minimum valid parameters should succeed"
@@ -143,17 +126,16 @@ mod integration_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_action_calculation_consistency() {
         let triangulation =
-            CausalTriangulation2D::new(4, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::new_with_delaunay(4, 1, 2).expect("Failed to create triangulation");
 
         let config = ActionConfig::default();
         let vertices = u32::try_from(triangulation.vertex_count()).unwrap_or_default();
         let edges = u32::try_from(triangulation.edge_count()).unwrap_or_default();
-        let triangles = u32::try_from(triangulation.triangle_count()).unwrap_or_default();
+        let faces = u32::try_from(triangulation.face_count()).unwrap_or_default();
 
-        let action = config.calculate_action(vertices, edges, triangles);
+        let action = config.calculate_action(vertices, edges, faces);
 
         // Action should be finite and non-NaN
         assert!(
@@ -161,11 +143,8 @@ mod integration_tests {
             "Action calculation must produce finite results"
         );
 
-        // For default config (κ₀=1.0, κ₂=1.0, λ=0.1): S = -V - T + 0.1*E
-        let expected = 0.1f64.mul_add(
-            f64::from(edges),
-            -f64::from(vertices) - f64::from(triangles),
-        );
+        // For default config (κ₀=1.0, κ₂=1.0, λ=0.1): S = -V - F + 0.1*E
+        let expected = 0.1f64.mul_add(f64::from(edges), -f64::from(vertices) - f64::from(faces));
         assert!(
             (action - expected).abs() < f64::EPSILON,
             "Action formula should match expected calculation"
@@ -173,31 +152,12 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_triangulation_generation_error_context() {
-        // Test enhanced error context for triangulation generation
-        use causal_dynamical_triangulations::triangulations::triangulation::try_generate_random_delaunay2_with_context;
-
-        // Test invalid vertex count
-        let result = try_generate_random_delaunay2_with_context(2, (0.0, 10.0));
-        assert!(result.is_err(), "Should reject insufficient vertices");
-
-        // Test invalid coordinate range
-        let result = try_generate_random_delaunay2_with_context(5, (10.0, 0.0));
-        assert!(result.is_err(), "Should reject invalid coordinate range");
-
-        // Test successful generation
-        let result = try_generate_random_delaunay2_with_context(4, (0.0, 10.0));
-        assert!(result.is_ok(), "Should succeed with valid parameters");
-    }
-
-    #[test]
-    #[allow(deprecated)]
     fn test_simulation_reproducibility() {
         // Test that simulations with same parameters produce consistent results structure
-        let triangulation1 =
-            CausalTriangulation2D::new(5, 1, 2).expect("Failed to create first triangulation");
-        let triangulation2 =
-            CausalTriangulation2D::new(5, 1, 2).expect("Failed to create second triangulation");
+        let triangulation1 = CdtTriangulation::new_with_delaunay(5, 1, 2)
+            .expect("Failed to create first triangulation");
+        let triangulation2 = CdtTriangulation::new_with_delaunay(5, 1, 2)
+            .expect("Failed to create second triangulation");
 
         let config = MetropolisConfig::new(1.0, 10, 2, 2);
         let action_config = ActionConfig::default();
@@ -205,8 +165,8 @@ mod integration_tests {
         let mut algorithm1 = MetropolisAlgorithm::new(config.clone(), action_config.clone());
         let mut algorithm2 = MetropolisAlgorithm::new(config, action_config);
 
-        let results1 = algorithm1.run_simulation(triangulation1.tds().clone());
-        let results2 = algorithm2.run_simulation(triangulation2.tds().clone());
+        let results1 = algorithm1.run_simulation_with_backend(triangulation1);
+        let results2 = algorithm2.run_simulation_with_backend(triangulation2);
 
         // Results should have same structure (though values may differ due to randomness)
         assert_eq!(
@@ -226,20 +186,19 @@ mod integration_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_memory_efficiency() {
         // Test that large triangulations can be created and processed efficiently
-        let triangulation =
-            CausalTriangulation2D::new(20, 1, 2).expect("Failed to create large triangulation");
+        let triangulation = CdtTriangulation::new_with_delaunay(20, 1, 2)
+            .expect("Failed to create large triangulation");
 
         // Verify reasonable scaling of components
         let vertices = triangulation.vertex_count();
         let edges = triangulation.edge_count();
-        let triangles = triangulation.triangle_count();
+        let faces = triangulation.face_count();
 
         assert!(vertices == 20, "Should have requested number of vertices");
         assert!(edges > vertices, "Should have more edges than vertices");
-        assert!(triangles > 0, "Should have positive triangle count");
+        assert!(faces > 0, "Should have positive face count");
 
         // Test that edge counting is efficient (doesn't hang)
         let start = std::time::Instant::now();

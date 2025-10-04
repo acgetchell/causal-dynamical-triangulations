@@ -12,7 +12,7 @@ use num_traits::cast::NumCast;
 use std::time::Instant;
 
 #[cfg(test)]
-use crate::triangulations::triangulation::generate_random_delaunay2;
+use crate::geometry::backends::delaunay::generate_random_delaunay2;
 
 /// Configuration for the Metropolis-Hastings algorithm.
 #[derive(Debug, Clone)]
@@ -354,7 +354,7 @@ impl MetropolisAlgorithm {
     }
 
     /// Counts the number of edges in the triangulation from a Tds.
-    /// Uses the shared canonical implementation from the triangulation module.
+    /// Uses the shared canonical implementation from the geometry backend module.
     #[must_use]
     fn count_edges_from_tds<T, VertexData, CellData, const D: usize>(
         triangulation: &Tds<T, VertexData, CellData, D>,
@@ -365,7 +365,7 @@ impl MetropolisAlgorithm {
         CellData: delaunay::core::DataType,
         [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
     {
-        use crate::triangulations::triangulation::count_edges_in_tds;
+        use crate::geometry::backends::delaunay::count_edges_in_tds;
 
         let edge_count = count_edges_in_tds(triangulation);
         u32::try_from(edge_count).unwrap_or_default()

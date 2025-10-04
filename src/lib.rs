@@ -18,7 +18,7 @@
 //!
 //! ```rust,no_run
 //! // Example would require command line arguments, so we skip execution
-//! use causal_dynamical_triangulations::{Config, run};
+//! use causal_dynamical_triangulations::{Config, run_with_backend};
 //! // Config::build() requires CLI arguments, so this is marked no_run
 //! ```
 
@@ -65,28 +65,14 @@ pub mod cdt {
     pub mod triangulation;
 }
 
-/// Triangulation data structures and algorithms (DEPRECATED - use `cdt::triangulation`).
-pub mod triangulations {
-    /// Unified triangulation module with generic Tds support.
-    pub mod triangulation;
-}
-
 // Re-exports for convenience
 pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
-pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResults};
+pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResultsBackend};
 pub use errors::{CdtError, CdtResult};
 
-// New trait-based triangulation (RECOMMENDED for new code)
+// Trait-based triangulation (recommended)
 pub use cdt::triangulation::CdtTriangulation;
-
-// Legacy triangulation types (DEPRECATED - migrate to CdtTriangulation)
-#[deprecated(
-    since = "0.1.0",
-    note = "Use CdtTriangulation with trait-based backends instead"
-)]
-#[allow(deprecated)]
-pub use triangulations::triangulation::{CausalTriangulation, CausalTriangulation2D};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -159,91 +145,6 @@ impl Config {
     #[must_use]
     pub const fn to_action_config(&self) -> ActionConfig {
         ActionConfig::new(self.coupling_0, self.coupling_2, self.cosmological_constant)
-    }
-}
-
-/// Runs the triangulation with the given configuration (LEGACY - use `run_with_backend` instead).
-///
-/// **DEPRECATED**: This function uses the old direct Tds approach.
-/// New code should use `run_with_backend()` for better abstraction.
-///
-/// This function can either generate a simple triangulation or run a full CDT simulation
-/// depending on the `simulate` flag in the configuration.
-#[deprecated(since = "0.1.0", note = "Use run_with_backend() instead")]
-///
-/// # Arguments
-///
-/// * `config` - Configuration parameters for the triangulation/simulation
-///
-/// # Returns
-///
-/// A `SimulationResults` struct containing the results of the operation,
-/// including the final triangulation and any measurements taken.
-///
-/// # Errors
-///
-/// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
-/// Returns triangulation generation errors from the underlying triangulation creation.
-pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
-    let vertices = config.vertices;
-    let timeslices = config.timeslices;
-
-    if let Some(dim) = config.dimension
-        && dim != 2
-    {
-        return Err(CdtError::UnsupportedDimension(dim.into()));
-    }
-
-    log::info!("Dimensionality: {}", config.dimension.unwrap_or(2));
-    log::info!("Number of vertices: {vertices}");
-    log::info!("Number of timeslices: {timeslices}");
-
-    // Create initial triangulation
-    #[allow(deprecated)]
-    let triangulation = CausalTriangulation::new(vertices, timeslices, 2)?;
-    triangulation.print_summary();
-
-    if config.simulate {
-        // Run full CDT simulation
-        let metropolis_config = config.to_metropolis_config();
-        let action_config = config.to_action_config();
-
-        let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-        let results = algorithm.run_simulation(triangulation.tds().clone());
-
-        log::info!("Simulation Results:");
-        log::info!(
-            "  Acceptance rate: {:.2}%",
-            results.acceptance_rate() * 100.0
-        );
-        log::info!("  Average action: {:.3}", results.average_action());
-
-        Ok(results)
-    } else {
-        // Just return basic simulation results with the triangulation
-        use cdt::metropolis::Measurement;
-        use std::time::Duration;
-
-        let initial_action = config.to_action_config().calculate_action(
-            u32::try_from(triangulation.vertex_count()).unwrap_or_default(),
-            u32::try_from(triangulation.edge_count()).unwrap_or_default(),
-            u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
-        );
-
-        Ok(SimulationResults {
-            config: config.to_metropolis_config(),
-            action_config: config.to_action_config(),
-            steps: vec![],
-            measurements: vec![Measurement {
-                step: 0,
-                action: initial_action,
-                vertices: u32::try_from(triangulation.vertex_count()).unwrap_or_default(),
-                edges: u32::try_from(triangulation.edge_count()).unwrap_or_default(),
-                triangles: u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
-            }],
-            elapsed_time: Duration::from_millis(0),
-            final_triangulation: triangulation.tds().clone(),
-        })
     }
 }
 
@@ -355,22 +256,20 @@ mod lib_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_run() {
+    fn test_run_with_backend() {
         let config = create_test_config();
         assert!(config.dimension.is_some());
-        let results = run(&config).expect("Failed to run triangulation");
-        assert!(!results.final_triangulation.cells().is_empty());
+        let results = run_with_backend(&config).expect("Failed to run triangulation");
+        assert!(results.triangulation.face_count() > 0);
         assert!(!results.measurements.is_empty());
     }
 
     #[test]
-    #[allow(deprecated)]
     fn triangulation_contains_triangles() {
         let config = create_test_config();
-        let results = run(&config).expect("Failed to run triangulation");
+        let results = run_with_backend(&config).expect("Failed to run triangulation");
         // Check that we have some triangles
-        assert!(!results.final_triangulation.cells().is_empty());
+        assert!(results.triangulation.face_count() > 0);
     }
 
     #[test]

@@ -63,10 +63,13 @@
         "powi",
         "powif",
         "println",
+        "profraw",
+        "proptest",
         "pycache",
         "pylint",
         "pyproject",
         "pytest",
+        "quickcheck",
         "regge",
         "Regge",
         "rngs",
@@ -93,6 +96,7 @@
         "timeslices",
         "Timevalue",
         "tomllib",
+        "usize",
         "venv",
         "Voronoi",
         "wasi",
@@ -103,8 +107,7 @@
         "ycenter",
         "ymax",
         "ymin",
-        "zerocopy",
-        "usize"
+        "zerocopy"
     ],
     "ignoreWords": [],
     "import": []

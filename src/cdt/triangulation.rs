@@ -147,7 +147,18 @@ impl<B: TriangulationMut> CdtTriangulation<B> {
         self.metadata.dimension
     }
 
-    /// Cached edge count with automatic invalidation
+    /// Cached edge count with automatic invalidation.
+    ///
+    /// Returns the cached edge count if the cache is valid (i.e., no mutations since last refresh).
+    /// Otherwise, computes the edge count directly **without updating the cache**.
+    ///
+    /// Call [`refresh_cache()`](Self::refresh_cache) to explicitly populate the cache before
+    /// performance-critical loops that frequently query edge counts.
+    ///
+    /// # Performance
+    ///
+    /// - Cache hit: O(1)
+    /// - Cache miss: O(E) - delegates to backend's edge counting which scans all facets
     pub fn edge_count(&self) -> usize {
         if let Some(cached) = &self.cache.edge_count
             && cached.modification_count == self.metadata.modification_count
@@ -334,8 +345,9 @@ impl CdtTriangulation<crate::geometry::backends::delaunay::DelaunayBackend2D> {
         time_slices: u32,
         dimension: u8,
     ) -> crate::errors::CdtResult<Self> {
-        use crate::geometry::backends::delaunay::DelaunayBackend;
-        use crate::triangulations::triangulation::try_generate_random_delaunay2_with_context;
+        use crate::geometry::backends::delaunay::{
+            DelaunayBackend, try_generate_random_delaunay2_with_context,
+        };
 
         // Validate dimension first
         if dimension != 2 {
@@ -356,26 +368,6 @@ impl CdtTriangulation<crate::geometry::backends::delaunay::DelaunayBackend2D> {
 
         Ok(Self::new(backend, time_slices, dimension))
     }
-
-    /// Convert from legacy `CausalTriangulation` to new `CdtTriangulation`.
-    ///
-    /// This is a migration helper to move from the deprecated direct Tds structure
-    /// to the new trait-based design.
-    #[allow(deprecated)]
-    pub fn from_causal_triangulation(
-        old: &crate::triangulations::triangulation::CausalTriangulation2D,
-    ) -> Self {
-        use crate::geometry::backends::delaunay::DelaunayBackend;
-
-        let time_slices = old.time_slices();
-        let dimension = old.dimension();
-
-        // Clone the TDS from the old structure
-        let tds = old.tds().clone();
-        let backend = DelaunayBackend::from_tds(tds);
-
-        Self::new(backend, time_slices, dimension)
-    }
 }
 
 #[cfg(test)]
@@ -393,28 +385,6 @@ mod tests {
         assert!(triangulation.vertex_count() > 0);
         assert!(triangulation.edge_count() > 0);
         assert!(triangulation.face_count() > 0);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_from_causal_triangulation() {
-        use crate::triangulations::triangulation::CausalTriangulation2D;
-
-        // Create old-style triangulation
-        let old_triangulation =
-            CausalTriangulation2D::new(5, 2, 2).expect("Failed to create old triangulation");
-
-        let old_time_slices = old_triangulation.time_slices();
-        let old_dimension = old_triangulation.dimension();
-        let old_vertex_count = old_triangulation.vertex_count();
-
-        // Convert to new structure
-        let new_triangulation = CdtTriangulation::from_causal_triangulation(&old_triangulation);
-
-        // Verify that data was preserved
-        assert_eq!(new_triangulation.time_slices(), old_time_slices);
-        assert_eq!(new_triangulation.dimension(), old_dimension);
-        assert_eq!(new_triangulation.vertex_count(), old_vertex_count);
     }
 
     #[test]
@@ -451,6 +421,7 @@ mod tests {
         }
 
         // Cache should have been invalidated but recalculated value should be same
+        // Note: Cache remains unpopulated since edge_count() doesn't auto-populate
         let recalculated_edge_count = triangulation.edge_count();
         assert_eq!(initial_edge_count, recalculated_edge_count);
     }
