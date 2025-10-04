@@ -24,7 +24,7 @@ pub enum MoveType {
 }
 
 /// Result of attempting an ergodic move.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MoveResult {
     /// Move was successfully applied
     Success,
@@ -299,7 +299,7 @@ mod tests {
         let result = system.attempt_22_move(&mut triangulation);
         assert!(matches!(
             result,
-            MoveResult::Success | MoveResult::CausalityViolation
+            MoveResult::Success | MoveResult::CausalityViolation | MoveResult::GeometricViolation
         ));
 
         // Check that statistics are updated

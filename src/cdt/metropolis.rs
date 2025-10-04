@@ -8,8 +8,7 @@ use crate::cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 use crate::errors::CdtError;
 use crate::util::generate_random_float;
 use delaunay::core::Tds;
-use delaunay::core::facet::AllFacetsIter;
-use std::collections::HashSet;
+use num_traits::cast::NumCast;
 use std::time::Instant;
 
 #[cfg(test)]
@@ -134,8 +133,13 @@ where
         }
 
         let accepted_count = self.steps.iter().filter(|step| step.accepted).count();
-        f64::from(u32::try_from(accepted_count).unwrap_or(u32::MAX))
-            / f64::from(u32::try_from(self.steps.len()).unwrap_or(u32::MAX))
+        let total_count = self.steps.len();
+
+        // Use NumCast for safe conversion without precision loss warnings
+        let accepted_f64 = NumCast::from(accepted_count).unwrap_or(0.0);
+        let total_f64 = NumCast::from(total_count).unwrap_or(1.0);
+
+        accepted_f64 / total_f64
     }
 
     /// Calculates the average action over all measurements.
@@ -146,7 +150,12 @@ where
         }
 
         let sum: f64 = self.measurements.iter().map(|m| m.action).sum();
-        sum / f64::from(u32::try_from(self.measurements.len()).unwrap_or(u32::MAX))
+        let count = self.measurements.len();
+
+        // Use NumCast for safe conversion without precision loss warnings
+        let count_f64 = NumCast::from(count).unwrap_or(1.0);
+
+        sum / count_f64
     }
 
     /// Returns measurements after thermalization.
@@ -265,6 +274,19 @@ impl MetropolisAlgorithm {
     {
         // Select and attempt a random move
         let move_type = self.ergodics.select_random_move();
+
+        // QUALITY ISSUE LOG: Incomplete ergodic moves implementation
+        log::warn!(
+            "QUALITY ISSUE: Ergodic move {move_type:?} attempted but not implemented for Tds"
+        );
+        log::warn!("This is a critical gap - CDT simulation cannot properly evolve triangulations");
+        log::warn!(
+            "Expected behavior: Move should modify triangulation and return Success/Rejection"
+        );
+        log::warn!(
+            "Actual behavior: All moves automatically rejected due to missing implementation"
+        );
+
         // For now, just return a placeholder since ergodic moves need to be adapted for Tds
         let move_result = MoveResult::Rejected(CdtError::ErgodicsFailure(
             "Tds-based moves not yet implemented".to_string(),
@@ -329,7 +351,7 @@ impl MetropolisAlgorithm {
     }
 
     /// Counts the number of edges in the triangulation from a Tds.
-    /// Uses `AllFacetsIter` to iterate over all edges (facets) in the 2D triangulation.
+    /// Uses the shared canonical implementation from the triangulation module.
     #[must_use]
     fn count_edges_from_tds<T, VertexData, CellData, const D: usize>(
         triangulation: &Tds<T, VertexData, CellData, D>,
@@ -340,31 +362,10 @@ impl MetropolisAlgorithm {
         CellData: delaunay::core::DataType,
         [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
     {
-        if triangulation.vertices().len() < 2 || triangulation.cells().is_empty() {
-            return 0;
-        }
+        use crate::triangulations::triangulation::count_edges_in_tds;
 
-        // Use AllFacetsIter to iterate over all facets (edges in 2D)
-        // and count unique edges by tracking vertex pairs
-        let mut unique_edges = HashSet::new();
-        let all_facets = AllFacetsIter::new(triangulation);
-
-        for facet_view in all_facets {
-            // Get the vertices of this facet (edge in 2D)
-            if let Ok(vertices_iter) = facet_view.vertices() {
-                let vertices: Vec<_> = vertices_iter.collect();
-                if vertices.len() == 2 {
-                    // Use UUID for unique vertex identification
-                    let uuid1 = vertices[0].uuid();
-                    let uuid2 = vertices[1].uuid();
-                    let mut edge = [uuid1, uuid2];
-                    edge.sort();
-                    unique_edges.insert(edge);
-                }
-            }
-        }
-
-        u32::try_from(unique_edges.len()).unwrap_or_default()
+        let edge_count = count_edges_in_tds(triangulation);
+        u32::try_from(edge_count).unwrap_or_default()
     }
 }
 
@@ -383,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_tds_vertex_and_edge_counting() {
-        let triangulation = generate_random_delaunay2(5);
+        let triangulation = generate_random_delaunay2(5, (0.0, 10.0));
 
         // Test that the Tds-based counting methods work
         let edge_count = MetropolisAlgorithm::count_edges_from_tds(&triangulation);
@@ -411,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_action_calculation() {
-        let triangulation = generate_random_delaunay2(3);
+        let triangulation = generate_random_delaunay2(3, (0.0, 10.0));
 
         let config = MetropolisConfig::default();
         let action_config = ActionConfig::default();
@@ -443,7 +444,7 @@ mod tests {
             },
         ];
 
-        let final_triangulation = generate_random_delaunay2(3);
+        let final_triangulation = generate_random_delaunay2(3, (0.0, 10.0));
 
         let results = SimulationResults {
             config,

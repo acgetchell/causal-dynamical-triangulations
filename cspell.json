@@ -11,6 +11,7 @@
         "anstream",
         "anstyle",
         "autocfg",
+        "bistellar",
         "bstr",
         "cfgs",
         "chacha",
@@ -98,7 +99,8 @@
         "ycenter",
         "ymax",
         "ymin",
-        "zerocopy"
+        "zerocopy",
+        "usize"
     ],
     "ignoreWords": [],
     "import": []

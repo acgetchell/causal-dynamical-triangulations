@@ -99,7 +99,7 @@ coverage:
     @echo "📊 Coverage report generated: target/tarpaulin/tarpaulin-report.html"
 
 # Pre-commit workflow (recommended before pushing)
-check: quality test-all
+commit-check: quality test-all
     @echo "🚀 Ready to commit! All checks passed."
 
 # CI simulation (run what CI runs)

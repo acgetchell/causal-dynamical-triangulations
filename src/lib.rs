@@ -59,8 +59,8 @@ pub use triangulations::triangulation::{CausalTriangulation, CausalTriangulation
 /// Configuration options for the `cdt-rs` crate.
 pub struct Config {
     /// Dimensionality of the triangulation
-    #[arg(short, long, value_parser = clap::value_parser!(u32).range(2..4))]
-    dimension: Option<u32>,
+    #[arg(short, long, value_parser = clap::value_parser!(u8).range(2..4))]
+    dimension: Option<u8>,
 
     /// Number of vertices
     #[arg(short, long, value_parser = clap::value_parser!(u32).range(3..))]
@@ -142,13 +142,9 @@ impl Config {
 /// A `SimulationResults` struct containing the results of the operation,
 /// including the final triangulation and any measurements taken.
 ///
-/// # Panics
-///
-/// Panics if an unsupported dimension (not 2D) is specified in the configuration.
-///
 /// # Errors
 ///
-/// Returns [`CdtError::UnsupportedDimension`] if an invalid dimension is specified.
+/// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
 /// Returns triangulation generation errors from the underlying triangulation creation.
 pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
     let vertices = config.vertices;
@@ -157,7 +153,7 @@ pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
     if let Some(dim) = config.dimension
         && dim != 2
     {
-        panic!("{}", CdtError::UnsupportedDimension(dim));
+        return Err(CdtError::UnsupportedDimension(dim.into()));
     }
 
     log::info!("Dimensionality: {}", config.dimension.unwrap_or(2));
@@ -174,7 +170,7 @@ pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
         let action_config = config.to_action_config();
 
         let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-        let results = algorithm.run_simulation(triangulation.tds);
+        let results = algorithm.run_simulation(triangulation.tds().clone());
 
         log::info!("Simulation Results:");
         log::info!(
@@ -207,7 +203,7 @@ pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
                 triangles: u32::try_from(triangulation.triangle_count()).unwrap_or_default(),
             }],
             elapsed_time: Duration::from_millis(0),
-            final_triangulation: triangulation.tds,
+            final_triangulation: triangulation.tds().clone(),
         })
     }
 }
