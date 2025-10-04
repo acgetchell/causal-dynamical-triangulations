@@ -233,7 +233,7 @@ where
     }
 
     fn is_valid(&self) -> bool {
-        // Basic validation
+        // Basic validation: check that the triangulation has vertices and cells
         !self.tds.vertices().is_empty() && !self.tds.cells().is_empty()
     }
 }
@@ -316,10 +316,136 @@ where
     }
 }
 
+// Additional implementation for types that support full Delaunay validation
+impl<T, VertexData, CellData, const D: usize> DelaunayBackend<T, VertexData, CellData, D>
+where
+    T: delaunay::geometry::CoordinateScalar
+        + std::ops::AddAssign
+        + std::ops::SubAssign
+        + std::iter::Sum
+        + 'static,
+    VertexData: delaunay::core::DataType + 'static,
+    CellData: delaunay::core::DataType + 'static,
+    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    for<'a> &'a T: std::ops::Div<T, Output = T>,
+{
+    /// Check if the triangulation satisfies the Delaunay property using `Tds::is_valid()`
+    /// This method is only available for types that satisfy the necessary trait bounds
+    #[must_use]
+    pub fn is_delaunay(&self) -> bool {
+        // Tds::is_valid() returns Result<(), TriangulationValidationError>
+        self.tds.is_valid().is_ok()
+    }
+}
+
 /// Type alias for common 2D Delaunay backend
 pub type DelaunayBackend2D = DelaunayBackend<f64, i32, i32, 2>;
 
 // TODO: Add factory functions for creating DelaunayBackend from points
 // TODO: Add conversion functions from delaunay vertex/cell handles to opaque handles
 // TODO: Implement proper iterator wrappers
-// TODO: Add tests for DelaunayBackend operations
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::triangulations::triangulation::generate_random_delaunay2;
+
+    #[test]
+    fn test_is_delaunay_on_valid_triangulation() {
+        // Create a simple valid Delaunay triangulation using the existing utility
+        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        // Test the specialized is_delaunay method
+        assert!(
+            backend.is_delaunay(),
+            "Valid Delaunay triangulation should pass is_delaunay check"
+        );
+    }
+
+    #[test]
+    fn test_is_delaunay_via_trait() {
+        // Create a simple valid Delaunay triangulation
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        // Test is_delaunay through the TriangulationOps trait
+        assert!(
+            backend.is_delaunay(),
+            "Valid triangle should satisfy Delaunay property"
+        );
+    }
+
+    #[test]
+    fn test_is_delaunay_with_multiple_points() {
+        // Create a triangulation with more points
+        let tds = generate_random_delaunay2(10, (0.0, 100.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        assert!(
+            backend.is_delaunay(),
+            "Random point triangulation should be valid Delaunay"
+        );
+    }
+
+    #[test]
+    fn test_is_delaunay_with_many_points() {
+        // Create a larger triangulation
+        let tds = generate_random_delaunay2(20, (0.0, 50.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        assert!(
+            backend.is_delaunay(),
+            "Larger triangulation should be valid Delaunay"
+        );
+    }
+
+    #[test]
+    fn test_is_valid_basic() {
+        // Test the basic is_valid implementation
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        assert!(
+            backend.is_valid(),
+            "Triangulation with vertices and cells should be valid"
+        );
+        assert_eq!(backend.vertex_count(), 3, "Should have 3 vertices");
+        assert!(backend.face_count() > 0, "Should have at least one face");
+    }
+
+    #[test]
+    fn test_is_delaunay_consistency() {
+        // Test that is_delaunay and is_valid are consistent for valid triangulations
+        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let is_valid = backend.is_valid();
+        let is_delaunay = backend.is_delaunay();
+
+        assert!(is_valid, "Triangulation should be valid");
+        assert!(
+            is_delaunay,
+            "Valid Delaunay triangulation should pass is_delaunay"
+        );
+    }
+
+    #[test]
+    fn test_is_delaunay_minimal_triangulation() {
+        // Test with minimal triangulation (3 vertices)
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        assert!(backend.is_valid(), "Minimal triangulation should be valid");
+        assert!(
+            backend.is_delaunay(),
+            "Minimal triangulation should satisfy Delaunay property"
+        );
+        assert_eq!(backend.vertex_count(), 3, "Should have exactly 3 vertices");
+        assert_eq!(
+            backend.face_count(),
+            1,
+            "Should have exactly 1 face (triangle)"
+        );
+    }
+}

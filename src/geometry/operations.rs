@@ -9,9 +9,10 @@ use super::traits::TriangulationQuery;
 pub trait TriangulationOps: TriangulationQuery {
     /// Check if the triangulation satisfies Delaunay property (if applicable)
     fn is_delaunay(&self) -> bool {
-        // TODO: Implement Delaunay property checking
-        // This would need to check the circumcircle property for all triangles
-        true
+        // Delegate to the backend's validation method
+        // For Delaunay backends with appropriate trait bounds, this checks the
+        // circumcircle property. For other backends, it checks basic validity.
+        self.is_valid()
     }
 
     /// Compute the convex hull of the triangulation

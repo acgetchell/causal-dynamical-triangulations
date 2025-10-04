@@ -4,6 +4,7 @@
 //! with any geometry backend implementing the trait interfaces.
 
 use crate::errors::CdtResult;
+use crate::geometry::operations::TriangulationOps;
 use crate::geometry::traits::TriangulationMut;
 use std::time::Instant;
 
@@ -180,16 +181,24 @@ impl<B: TriangulationMut> CdtTriangulation<B> {
     /// # Errors
     /// Returns error if the triangulation is invalid
     pub fn validate_cdt_properties(&self) -> CdtResult<()> {
-        // TODO: Implement full CDT property validation
-        // - Check topology (Euler characteristic)
-        // - Check causality constraints
-        // - Check foliation consistency
-
+        // Check basic validity
         if !self.geometry.is_valid() {
             return Err(crate::errors::CdtError::InvalidParameters(
                 "Invalid geometry: triangulation is not valid".to_string(),
             ));
         }
+
+        // Check Delaunay property (for backends that support it)
+        if !self.geometry.is_delaunay() {
+            return Err(crate::errors::CdtError::InvalidParameters(
+                "Invalid geometry: triangulation does not satisfy Delaunay property".to_string(),
+            ));
+        }
+
+        // TODO: Implement additional CDT property validation
+        // - Check topology (Euler characteristic)
+        // - Check causality constraints
+        // - Check foliation consistency
 
         Ok(())
     }
