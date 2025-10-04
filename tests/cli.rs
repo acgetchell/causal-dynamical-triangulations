@@ -29,7 +29,7 @@ fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
 
     cmd.assert()
         .success()
-        .stderr(predicate::str::contains("Triangles"));
+        .stderr(predicate::str::contains("faces"));
 
     Ok(())
 }

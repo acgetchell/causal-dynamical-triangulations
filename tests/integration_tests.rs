@@ -3,8 +3,10 @@
 //! This module contains integration tests that verify the complete CDT simulation
 //! workflows, topology preservation, error handling, and consistency between components.
 
+#[allow(deprecated)]
 use causal_dynamical_triangulations::cdt::action::ActionConfig;
 use causal_dynamical_triangulations::cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig};
+#[allow(deprecated)]
 use causal_dynamical_triangulations::triangulations::triangulation::{
     CausalTriangulation2D, count_edges_in_tds, generate_random_delaunay2,
 };
@@ -14,6 +16,7 @@ mod integration_tests {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn test_complete_cdt_simulation_workflow() {
         // Test full CDT simulation pipeline
         let triangulation =
@@ -44,13 +47,11 @@ mod integration_tests {
             results.average_action().is_finite(),
             "Average action should be finite"
         );
-        assert!(
-            results.elapsed_time.as_millis() > 0,
-            "Simulation should take measurable time"
-        );
+        // Note: elapsed_time may be 0 on fast machines due to timer resolution
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_edge_counting_consistency() {
         // Test that both edge counting methods produce identical results
         let tds = generate_random_delaunay2(7, (0.0, 10.0));
@@ -66,6 +67,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_topology_invariants() {
         let triangulation =
             CausalTriangulation2D::new(6, 1, 2).expect("Failed to create triangulation");
@@ -84,6 +86,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_enhanced_caching_behavior() {
         let mut triangulation =
             CausalTriangulation2D::new(5, 1, 2).expect("Failed to create triangulation");
@@ -119,6 +122,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_error_handling_robustness() {
         // Test parameter validation with enhanced error context
         let result = CausalTriangulation2D::new(2, 1, 2);
@@ -139,6 +143,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_action_calculation_consistency() {
         let triangulation =
             CausalTriangulation2D::new(4, 1, 2).expect("Failed to create triangulation");
@@ -186,6 +191,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_simulation_reproducibility() {
         // Test that simulations with same parameters produce consistent results structure
         let triangulation1 =
@@ -220,6 +226,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_memory_efficiency() {
         // Test that large triangulations can be created and processed efficiently
         let triangulation =

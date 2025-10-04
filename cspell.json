@@ -86,6 +86,8 @@
         "swiftlint",
         "termtree",
         "thermalization",
+        "thiserror",
+        "timelike",
         "timeslices",
         "Timevalue",
         "tomllib",

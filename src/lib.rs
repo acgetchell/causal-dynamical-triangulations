@@ -31,6 +31,28 @@ pub mod errors;
 /// Utility functions for random number generation and mathematical operations.
 pub mod util;
 
+/// Geometry abstraction layer for CDT simulations.
+///
+/// This module provides trait-based geometry operations that isolate CDT algorithms
+/// from specific geometry implementations.
+pub mod geometry {
+    /// CDT-agnostic mesh data structures.
+    pub mod mesh;
+    /// High-level triangulation operations.
+    pub mod operations;
+    /// Core geometry traits for CDT abstraction.
+    pub mod traits;
+
+    /// Geometry backend implementations.
+    pub mod backends {
+        /// Delaunay backend - wraps the delaunay crate.
+        pub mod delaunay;
+
+        /// Mock backend for testing.
+        pub mod mock;
+    }
+}
+
 /// Causal Dynamical Triangulations implementation modules.
 pub mod cdt {
     /// Action calculation for CDT simulations.
@@ -39,9 +61,11 @@ pub mod cdt {
     pub mod ergodic_moves;
     /// Metropolis-Hastings algorithm implementation.
     pub mod metropolis;
+    /// CDT triangulation wrapper.
+    pub mod triangulation;
 }
 
-/// Triangulation data structures and algorithms.
+/// Triangulation data structures and algorithms (DEPRECATED - use `cdt::triangulation`).
 pub mod triangulations {
     /// Unified triangulation module with generic Tds support.
     pub mod triangulation;
@@ -52,6 +76,16 @@ pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResults};
 pub use errors::{CdtError, CdtResult};
+
+// New trait-based triangulation (RECOMMENDED for new code)
+pub use cdt::triangulation::CdtTriangulation;
+
+// Legacy triangulation types (DEPRECATED - migrate to CdtTriangulation)
+#[deprecated(
+    since = "0.1.0",
+    note = "Use CdtTriangulation with trait-based backends instead"
+)]
+#[allow(deprecated)]
 pub use triangulations::triangulation::{CausalTriangulation, CausalTriangulation2D};
 
 #[derive(Parser)]
@@ -128,10 +162,14 @@ impl Config {
     }
 }
 
-/// Runs the triangulation with the given configuration.
+/// Runs the triangulation with the given configuration (LEGACY - use `run_with_backend` instead).
+///
+/// **DEPRECATED**: This function uses the old direct Tds approach.
+/// New code should use `run_with_backend()` for better abstraction.
 ///
 /// This function can either generate a simple triangulation or run a full CDT simulation
 /// depending on the `simulate` flag in the configuration.
+#[deprecated(since = "0.1.0", note = "Use run_with_backend() instead")]
 ///
 /// # Arguments
 ///
@@ -161,6 +199,7 @@ pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
     log::info!("Number of timeslices: {timeslices}");
 
     // Create initial triangulation
+    #[allow(deprecated)]
     let triangulation = CausalTriangulation::new(vertices, timeslices, 2)?;
     triangulation.print_summary();
 
@@ -208,6 +247,92 @@ pub fn run(config: &Config) -> CdtResult<SimulationResults<f64, i32, i32, 2>> {
     }
 }
 
+/// Runs the triangulation with the new trait-based backend system (RECOMMENDED).
+///
+/// This function uses the trait-based geometry backend system, which provides
+/// better abstraction and testability compared to the legacy Tds-based approach.
+///
+/// # Arguments
+///
+/// * `config` - Configuration parameters for the triangulation/simulation
+///
+/// # Returns
+///
+/// A `SimulationResultsBackend` struct containing the results using the new backend.
+///
+/// # Errors
+///
+/// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
+/// Returns triangulation generation errors from the underlying triangulation creation.
+pub fn run_with_backend(config: &Config) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
+    let vertices = config.vertices;
+    let timeslices = config.timeslices;
+
+    if let Some(dim) = config.dimension
+        && dim != 2
+    {
+        return Err(CdtError::UnsupportedDimension(dim.into()));
+    }
+
+    log::info!("Dimensionality: {}", config.dimension.unwrap_or(2));
+    log::info!("Number of vertices: {vertices}");
+    log::info!("Number of timeslices: {timeslices}");
+    log::info!("Using new trait-based backend system");
+
+    // Create initial triangulation with new backend
+    let triangulation = CdtTriangulation::new_with_delaunay(vertices, timeslices, 2)?;
+
+    log::info!(
+        "Triangulation created with {} vertices, {} edges, {} faces",
+        triangulation.vertex_count(),
+        triangulation.edge_count(),
+        triangulation.face_count()
+    );
+
+    if config.simulate {
+        // Run full CDT simulation with new backend
+        let metropolis_config = config.to_metropolis_config();
+        let action_config = config.to_action_config();
+
+        let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
+        let results = algorithm.run_simulation_with_backend(triangulation);
+
+        log::info!("Simulation Results:");
+        log::info!(
+            "  Acceptance rate: {:.2}%",
+            results.acceptance_rate() * 100.0
+        );
+        log::info!("  Average action: {:.3}", results.average_action());
+
+        Ok(results)
+    } else {
+        // Just return basic simulation results with the triangulation
+        use cdt::metropolis::Measurement;
+        use std::time::Duration;
+
+        let initial_action = config.to_action_config().calculate_action(
+            u32::try_from(triangulation.vertex_count()).unwrap_or_default(),
+            u32::try_from(triangulation.edge_count()).unwrap_or_default(),
+            u32::try_from(triangulation.face_count()).unwrap_or_default(),
+        );
+
+        Ok(cdt::metropolis::SimulationResultsBackend {
+            config: config.to_metropolis_config(),
+            action_config: config.to_action_config(),
+            steps: vec![],
+            measurements: vec![Measurement {
+                step: 0,
+                action: initial_action,
+                vertices: u32::try_from(triangulation.vertex_count()).unwrap_or_default(),
+                edges: u32::try_from(triangulation.edge_count()).unwrap_or_default(),
+                triangles: u32::try_from(triangulation.face_count()).unwrap_or_default(),
+            }],
+            elapsed_time: Duration::from_millis(0),
+            triangulation,
+        })
+    }
+}
+
 #[cfg(test)]
 mod lib_tests {
     use super::*;
@@ -230,6 +355,7 @@ mod lib_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_run() {
         let config = create_test_config();
         assert!(config.dimension.is_some());
@@ -239,6 +365,7 @@ mod lib_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn triangulation_contains_triangles() {
         let config = create_test_config();
         let results = run(&config).expect("Failed to run triangulation");

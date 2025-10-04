@@ -56,8 +56,7 @@ quality: fmt clippy doc-check shell-lint markdown-lint spell-check validate-json
 
 # Testing
 test:
-    cargo test --lib --verbose
-    cargo test --doc --verbose
+    cargo test --verbose
 
 test-release:
     cargo test --release
@@ -120,7 +119,7 @@ clean:
 help-workflows:
     @echo "Common Just workflows:"
     @echo "  just dev           # Quick development cycle (format, lint, test)"
-    @echo "  just check         # Full pre-commit checks"
+    @echo "  just commit-check  # Full pre-commit checks"
     @echo "  just ci            # Simulate CI pipeline"
     @echo "  just quality       # All quality checks"
     @echo "  just test-all      # All tests"

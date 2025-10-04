@@ -1,4 +1,26 @@
-//! Triangulation module for CDT.
+//! Triangulation module for CDT (DEPRECATED).
+//!
+//! **DEPRECATED**: This module provides the legacy triangulation implementation
+//! that directly uses `delaunay::core::Tds`. New code should use the trait-based
+//! [`crate::cdt::triangulation::CdtTriangulation`] instead, which provides better
+//! abstraction and testability through geometry backend traits.
+//!
+//! # Migration Guide
+//!
+//! To migrate from `CausalTriangulation` to the new structure:
+//!
+//! ```rust,ignore
+//! // Old code:
+//! use causal_dynamical_triangulations::CausalTriangulation2D;
+//! let old = CausalTriangulation2D::new(10, 3, 2)?;
+//!
+//! // New code (preferred):
+//! use causal_dynamical_triangulations::CdtTriangulation;
+//! let new = CdtTriangulation::new_with_delaunay(10, 3, 2)?;
+//!
+//! // Or convert existing triangulation:
+//! let new = CdtTriangulation::from_causal_triangulation(old);
+//! ```
 //!
 //! This module provides the core triangulation functionality for
 //! Causal Dynamical Triangulations, including integration with
@@ -12,10 +34,22 @@ use std::collections::HashSet;
 use std::iter::Sum;
 use std::ops::{AddAssign, Div, SubAssign};
 
-/// Main triangulation structure for CDT simulations.
+/// Main triangulation structure for CDT simulations (DEPRECATED).
+///
+/// **DEPRECATED**: Use [`crate::cdt::triangulation::CdtTriangulation`] instead.
+/// This type is maintained for backward compatibility but will be removed in a future version.
 ///
 /// This struct wraps a Tds (Triangulated Data Structure) from the delaunay crate
 /// and adds CDT-specific metadata like time slices.
+///
+/// # Migration
+///
+/// Use [`crate::cdt::triangulation::CdtTriangulation::from_causal_triangulation`] to convert
+/// existing code to the new structure.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use cdt::triangulation::CdtTriangulation with trait-based geometry backends instead"
+)]
 #[derive(Debug, Clone)]
 pub struct CausalTriangulation<T, VertexData, CellData, const D: usize>
 where
@@ -39,6 +73,7 @@ where
 /// This wrapper provides mutable access to the underlying TDS while ensuring
 /// that the cached edge count is invalidated when the wrapper is dropped,
 /// maintaining cache consistency.
+#[allow(deprecated)]
 pub struct TdsMutWrapper<'a, T, VertexData, CellData, const D: usize>
 where
     T: delaunay::geometry::CoordinateScalar,
@@ -51,6 +86,7 @@ where
     modification_occurred: std::cell::Cell<bool>,
 }
 
+#[allow(deprecated)]
 impl<'a, T, VertexData, CellData, const D: usize> TdsMutWrapper<'a, T, VertexData, CellData, D>
 where
     T: delaunay::geometry::CoordinateScalar,
@@ -88,6 +124,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<T, VertexData, CellData, const D: usize> std::ops::Deref
     for TdsMutWrapper<'_, T, VertexData, CellData, D>
 where
@@ -103,6 +140,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<T, VertexData, CellData, const D: usize> std::ops::DerefMut
     for TdsMutWrapper<'_, T, VertexData, CellData, D>
 where
@@ -116,6 +154,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<T, VertexData, CellData, const D: usize> Drop for TdsMutWrapper<'_, T, VertexData, CellData, D>
 where
     T: delaunay::geometry::CoordinateScalar,
@@ -135,9 +174,18 @@ where
     }
 }
 
-/// Type alias for 2D triangulations with f64 coordinates
+/// Type alias for 2D triangulations with f64 coordinates (DEPRECATED).
+///
+/// **DEPRECATED**: Use [`crate::cdt::triangulation::CdtTriangulation`] with
+/// [`crate::geometry::backends::delaunay::DelaunayBackend2D`] instead.
+#[allow(deprecated)]
+#[deprecated(
+    since = "0.2.0",
+    note = "Use cdt::triangulation::CdtTriangulation with DelaunayBackend2D instead"
+)]
 pub type CausalTriangulation2D = CausalTriangulation<f64, i32, i32, 2>;
 
+#[allow(deprecated)]
 impl<T, VertexData, CellData, const D: usize> CausalTriangulation<T, VertexData, CellData, D>
 where
     T: delaunay::geometry::CoordinateScalar + AddAssign<T> + SubAssign<T> + Sum + NumCast,
@@ -249,6 +297,7 @@ where
 }
 
 // Specific implementation for 2D triangulations
+#[allow(deprecated)]
 impl CausalTriangulation2D {
     /// Creates a new 2D causal triangulation with validation.
     ///
@@ -452,6 +501,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn test_causal_triangulation_creation() {
         let triangulation =
             CausalTriangulation2D::new(10, 3, 2).expect("Failed to create triangulation");
@@ -462,6 +512,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_vertex_counting() {
         let triangulation =
             CausalTriangulation2D::new(5, 2, 2).expect("Failed to create triangulation");
@@ -473,6 +524,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_triangulation_access() {
         let triangulation =
             CausalTriangulation2D::new(3, 1, 2).expect("Failed to create triangulation");
@@ -485,6 +537,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_from_tds_constructor() {
         let tds = generate_random_delaunay2(5, (0.0, 10.0));
         let triangulation = CausalTriangulation2D::from_tds(tds, 2, 2);
@@ -504,6 +557,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_smart_wrapper_cache_invalidation() {
         let mut triangulation =
             CausalTriangulation2D::new(5, 2, 2).expect("Failed to create triangulation");
@@ -529,6 +583,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_legacy_tds_mut_behavior() {
         let mut triangulation =
             CausalTriangulation2D::new(5, 2, 2).expect("Failed to create triangulation");
@@ -550,6 +605,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_invalidation_validation() {
         let mut triangulation =
             CausalTriangulation2D::new(5, 2, 2).expect("Failed to create triangulation");
@@ -588,6 +644,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_consistency_with_wrapper() {
         let mut triangulation =
             CausalTriangulation2D::new(3, 1, 2).expect("Failed to create triangulation");
@@ -632,24 +689,28 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_invalid_vertices() {
         let result = CausalTriangulation2D::new(2, 1, 2);
         assert!(result.is_err());
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_invalid_time_slices() {
         let result = CausalTriangulation2D::new(4, 0, 2);
         assert!(result.is_err());
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_invalid_dimension() {
         let result = CausalTriangulation2D::new(4, 1, 3);
         assert!(result.is_err());
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_minimum_triangulation() {
         let triangulation =
             CausalTriangulation2D::new(3, 1, 2).expect("Failed to create minimal triangulation");
@@ -666,6 +727,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_getter_methods() {
         let triangulation =
             CausalTriangulation2D::new(4, 2, 2).expect("Failed to create triangulation");
@@ -680,6 +742,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_controlled_mutation_invalidates_cache() {
         let mut triangulation =
             CausalTriangulation2D::new(4, 1, 2).expect("Failed to create triangulation");

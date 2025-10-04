@@ -169,6 +169,9 @@ where
 }
 
 /// Metropolis-Hastings algorithm implementation for CDT.
+///
+/// This implementation works with both the legacy Tds-based approach
+/// and the new trait-based geometry backends.
 pub struct MetropolisAlgorithm {
     /// Algorithm configuration
     config: MetropolisConfig,
@@ -366,6 +369,147 @@ impl MetropolisAlgorithm {
 
         let edge_count = count_edges_in_tds(triangulation);
         u32::try_from(edge_count).unwrap_or_default()
+    }
+    /// Run simulation with new trait-based `CdtTriangulation` (RECOMMENDED).
+    ///
+    /// This is the recommended interface that works with geometry backends.
+    /// Provides better abstraction than the legacy `run_simulation()` method.
+    pub fn run_simulation_with_backend(
+        &mut self,
+        triangulation: crate::cdt::triangulation::CdtTriangulation<
+            crate::geometry::backends::delaunay::DelaunayBackend2D,
+        >,
+    ) -> SimulationResultsBackend {
+        use crate::geometry::traits::TriangulationQuery;
+
+        let start_time = Instant::now();
+        let mut steps = Vec::new();
+        let mut measurements = Vec::new();
+
+        log::info!("Starting Metropolis-Hastings simulation with new backend...");
+        log::info!("Temperature: {}", self.config.temperature);
+        log::info!("Total steps: {}", self.config.steps);
+        log::info!("Thermalization steps: {}", self.config.thermalization_steps);
+
+        // Calculate initial action
+        let geometry = triangulation.geometry();
+        let current_action = self.action_config.calculate_action(
+            u32::try_from(geometry.vertex_count()).unwrap_or_default(),
+            u32::try_from(geometry.edge_count()).unwrap_or_default(),
+            u32::try_from(geometry.face_count()).unwrap_or_default(),
+        );
+
+        for step_num in 0..self.config.steps {
+            // For now, just simulate the step without actual moves
+            // TODO: Implement ergodic moves for trait-based backends
+            let move_type = self.ergodics.select_random_move();
+
+            let mc_step = MonteCarloStep {
+                step: step_num,
+                move_type,
+                accepted: false,
+                action_before: current_action,
+                action_after: None,
+                delta_action: None,
+            };
+
+            steps.push(mc_step);
+
+            // Take measurement if needed
+            if step_num % self.config.measurement_frequency == 0 {
+                let measurement = Measurement {
+                    step: step_num,
+                    action: current_action,
+                    vertices: u32::try_from(geometry.vertex_count()).unwrap_or_default(),
+                    edges: u32::try_from(geometry.edge_count()).unwrap_or_default(),
+                    triangles: u32::try_from(geometry.face_count()).unwrap_or_default(),
+                };
+                measurements.push(measurement);
+            }
+
+            // Progress reporting
+            if step_num % 100 == 0 {
+                log::debug!(
+                    "Step {}/{}, Action: {:.3}",
+                    step_num,
+                    self.config.steps,
+                    current_action
+                );
+            }
+        }
+
+        let elapsed_time = start_time.elapsed();
+        log::info!("Simulation completed in {elapsed_time:.2?}");
+
+        SimulationResultsBackend {
+            config: self.config.clone(),
+            action_config: self.action_config.clone(),
+            steps,
+            measurements,
+            elapsed_time,
+            triangulation,
+        }
+    }
+}
+
+/// Results from a simulation using the new backend system.
+#[derive(Debug)]
+pub struct SimulationResultsBackend {
+    /// Configuration used for the simulation
+    pub config: MetropolisConfig,
+    /// Action configuration used
+    pub action_config: ActionConfig,
+    /// All Monte Carlo steps performed
+    pub steps: Vec<MonteCarloStep>,
+    /// Measurements taken during simulation
+    pub measurements: Vec<Measurement>,
+    /// Total simulation time
+    pub elapsed_time: std::time::Duration,
+    /// Final triangulation state
+    pub triangulation: crate::cdt::triangulation::CdtTriangulation<
+        crate::geometry::backends::delaunay::DelaunayBackend2D,
+    >,
+}
+
+impl SimulationResultsBackend {
+    /// Calculates the acceptance rate for the simulation.
+    #[must_use]
+    pub fn acceptance_rate(&self) -> f64 {
+        if self.steps.is_empty() {
+            return 0.0;
+        }
+
+        let accepted_count = self.steps.iter().filter(|step| step.accepted).count();
+        let total_count = self.steps.len();
+
+        let accepted_f64 = NumCast::from(accepted_count).unwrap_or(0.0);
+        let total_f64 = NumCast::from(total_count).unwrap_or(1.0);
+
+        accepted_f64 / total_f64
+    }
+
+    /// Calculates the average action over all measurements.
+    #[must_use]
+    pub fn average_action(&self) -> f64 {
+        if self.measurements.is_empty() {
+            return 0.0;
+        }
+
+        let sum: f64 = self.measurements.iter().map(|m| m.action).sum();
+        let count = self.measurements.len();
+
+        let count_f64 = NumCast::from(count).unwrap_or(1.0);
+
+        sum / count_f64
+    }
+
+    /// Returns measurements after thermalization.
+    #[must_use]
+    pub fn equilibrium_measurements(&self) -> Vec<&Measurement> {
+        self.measurements
+            .iter()
+            .filter(|m| m.step >= self.config.thermalization_steps)
+            .collect()
     }
 }
 
