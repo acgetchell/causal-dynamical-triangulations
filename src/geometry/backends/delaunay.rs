@@ -108,7 +108,8 @@ where
     }
 
     /// Get a mutable reference to the underlying Tds (for migration purposes only)
-    pub const fn tds_mut(&mut self) -> &mut delaunay::core::Tds<T, VertexData, CellData, D> {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn tds_mut(&mut self) -> &mut delaunay::core::Tds<T, VertexData, CellData, D> {
         &mut self.tds
     }
 }
@@ -158,78 +159,191 @@ where
     }
 
     fn vertices(&self) -> Box<dyn Iterator<Item = Self::VertexHandle> + '_> {
-        // TODO: Implement proper iterator that converts delaunay vertex handles to our opaque handles
-        Box::new(std::iter::empty())
+        Box::new(
+            self.tds
+                .vertices()
+                .iter()
+                .map(|(_, v)| DelaunayVertexHandle { id: v.uuid() }),
+        )
     }
 
     fn edges(&self) -> Box<dyn Iterator<Item = Self::EdgeHandle> + '_> {
-        // TODO: Implement proper edge iterator
-        Box::new(std::iter::empty())
+        // Collect all unique edges using the same logic as edge_count
+        let mut unique_edges = std::collections::HashMap::new();
+        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
+
+        for (idx, facet_view) in all_facets.enumerate() {
+            if let Ok(vertices_iter) = facet_view.vertices() {
+                let vertices: Vec<_> = vertices_iter.collect();
+                if vertices.len() == 2 {
+                    let uuid1 = vertices[0].uuid();
+                    let uuid2 = vertices[1].uuid();
+                    let mut edge = [uuid1, uuid2];
+                    edge.sort();
+                    // Store the first index we see for each unique edge
+                    unique_edges.entry(edge).or_insert(idx);
+                }
+            }
+        }
+
+        Box::new(
+            unique_edges
+                .into_values()
+                .map(|id| DelaunayEdgeHandle { id }),
+        )
     }
 
     fn faces(&self) -> Box<dyn Iterator<Item = Self::FaceHandle> + '_> {
-        // TODO: Implement proper face iterator
-        Box::new(std::iter::empty())
+        Box::new(
+            self.tds
+                .cells()
+                .iter()
+                .map(|(_, c)| DelaunayFaceHandle { id: c.uuid() }),
+        )
     }
 
     fn vertex_coordinates(
         &self,
-        _vertex: &Self::VertexHandle,
+        vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::Coordinate>, Self::Error> {
-        // TODO: Implement coordinate lookup
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        use delaunay::geometry::traits::coordinate::Coordinate;
+
+        // Find the vertex in the Tds by UUID
+        let v = self
+            .tds
+            .vertices()
+            .iter()
+            .find(|(_, v)| v.uuid() == vertex.id)
+            .map(|(_, v)| v)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
+
+        // Extract coordinates from the point using the Coordinate trait
+        let point = v.point();
+        Ok(point.to_array().to_vec())
     }
 
     fn face_vertices(
         &self,
-        _face: &Self::FaceHandle,
+        face: &Self::FaceHandle,
     ) -> Result<Vec<Self::VertexHandle>, Self::Error> {
-        // TODO: Implement face vertex lookup
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        // Find the cell in the Tds by UUID
+        let cell = self
+            .tds
+            .cells()
+            .iter()
+            .find(|(_, c)| c.uuid() == face.id)
+            .map(|(_, c)| c)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
+
+        // Get vertices from the cell using the vertices() method
+        let vertices = cell
+            .vertices()
+            .iter()
+            .map(|v| DelaunayVertexHandle { id: v.uuid() })
+            .collect();
+
+        Ok(vertices)
     }
 
     fn edge_endpoints(
         &self,
-        _edge: &Self::EdgeHandle,
+        edge: &Self::EdgeHandle,
     ) -> Result<(Self::VertexHandle, Self::VertexHandle), Self::Error> {
-        // TODO: Implement edge endpoint lookup
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        // Find the edge by iterating through facets
+        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
+
+        for (idx, facet_view) in all_facets.enumerate() {
+            if idx == edge.id
+                && let Ok(vertices_iter) = facet_view.vertices()
+            {
+                let vertices: Vec<_> = vertices_iter.collect();
+                if vertices.len() == 2 {
+                    return Ok((
+                        DelaunayVertexHandle {
+                            id: vertices[0].uuid(),
+                        },
+                        DelaunayVertexHandle {
+                            id: vertices[1].uuid(),
+                        },
+                    ));
+                }
+            }
+        }
+
+        Err(DelaunayError::InvalidHandle("Edge not found".to_string()))
     }
 
     fn adjacent_faces(
         &self,
-        _vertex: &Self::VertexHandle,
+        vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::FaceHandle>, Self::Error> {
-        // TODO: Implement adjacency query
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        // Find all cells that contain this vertex
+        let mut adjacent = Vec::new();
+
+        for (_, cell) in self.tds.cells() {
+            // Check if this cell contains the vertex by checking its vertices
+            if cell.vertices().iter().any(|v| v.uuid() == vertex.id) {
+                adjacent.push(DelaunayFaceHandle { id: cell.uuid() });
+            }
+        }
+
+        Ok(adjacent)
     }
 
     fn incident_edges(
         &self,
-        _vertex: &Self::VertexHandle,
+        vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::EdgeHandle>, Self::Error> {
-        // TODO: Implement incidence query
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        // Find all edges that contain this vertex
+        // Use a HashMap to track unique edges and their first occurrence index
+        let mut unique_edges = std::collections::HashMap::new();
+        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
+
+        for (idx, facet_view) in all_facets.enumerate() {
+            if let Ok(vertices_iter) = facet_view.vertices() {
+                let vertices: Vec<_> = vertices_iter.collect();
+                if vertices.len() == 2 {
+                    let uuid1 = vertices[0].uuid();
+                    let uuid2 = vertices[1].uuid();
+
+                    if uuid1 == vertex.id || uuid2 == vertex.id {
+                        // Create a sorted edge key to ensure uniqueness
+                        let mut edge = [uuid1, uuid2];
+                        edge.sort();
+                        unique_edges.entry(edge).or_insert(idx);
+                    }
+                }
+            }
+        }
+
+        Ok(unique_edges
+            .into_values()
+            .map(|id| DelaunayEdgeHandle { id })
+            .collect())
     }
 
     fn face_neighbors(
         &self,
-        _face: &Self::FaceHandle,
+        face: &Self::FaceHandle,
     ) -> Result<Vec<Self::FaceHandle>, Self::Error> {
-        // TODO: Implement neighbor query
-        Err(DelaunayError::OperationFailed(
-            "Not implemented".to_string(),
-        ))
+        // Find the cell in the Tds by UUID
+        let cell = self
+            .tds
+            .cells()
+            .iter()
+            .find(|(_, c)| c.uuid() == face.id)
+            .map(|(_, c)| c)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
+
+        // Get neighbors from the cell's public neighbors field
+        let mut neighbors = Vec::new();
+        if let Some(neighbor_uuids) = &cell.neighbors {
+            for neighbor_uuid in neighbor_uuids.iter().flatten() {
+                neighbors.push(DelaunayFaceHandle { id: *neighbor_uuid });
+            }
+        }
+
+        Ok(neighbors)
     }
 
     fn is_valid(&self) -> bool {
@@ -447,5 +561,344 @@ mod tests {
             1,
             "Should have exactly 1 face (triangle)"
         );
+    }
+
+    // Tests for iterator methods
+
+    #[test]
+    fn test_vertices_iterator() {
+        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let vertices: Vec<_> = backend.vertices().collect();
+        assert_eq!(
+            vertices.len(),
+            backend.vertex_count(),
+            "Iterator should return all vertices"
+        );
+
+        // Check that all handles are unique
+        let unique_count = vertices
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        assert_eq!(
+            unique_count,
+            vertices.len(),
+            "All vertex handles should be unique"
+        );
+    }
+
+    #[test]
+    fn test_edges_iterator() {
+        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let edges: Vec<_> = backend.edges().collect();
+        assert_eq!(
+            edges.len(),
+            backend.edge_count(),
+            "Iterator should return all edges"
+        );
+
+        // Check that all handles are unique
+        let unique_count = edges.iter().collect::<std::collections::HashSet<_>>().len();
+        assert_eq!(
+            unique_count,
+            edges.len(),
+            "All edge handles should be unique"
+        );
+    }
+
+    #[test]
+    fn test_faces_iterator() {
+        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let faces: Vec<_> = backend.faces().collect();
+        assert_eq!(
+            faces.len(),
+            backend.face_count(),
+            "Iterator should return all faces"
+        );
+
+        // Check that all handles are unique
+        let unique_count = faces.iter().collect::<std::collections::HashSet<_>>().len();
+        assert_eq!(
+            unique_count,
+            faces.len(),
+            "All face handles should be unique"
+        );
+    }
+
+    // Tests for query methods
+
+    #[test]
+    fn test_vertex_coordinates() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let vertices: Vec<_> = backend.vertices().collect();
+        assert!(!vertices.is_empty(), "Should have at least one vertex");
+
+        for vertex in &vertices {
+            let coords = backend
+                .vertex_coordinates(vertex)
+                .expect("Should retrieve coordinates for valid vertex");
+            assert_eq!(coords.len(), 2, "Should have 2D coordinates");
+            assert!(
+                coords.iter().all(|&c| (0.0..=10.0).contains(&c)),
+                "Coordinates should be within expected range"
+            );
+        }
+    }
+
+    #[test]
+    fn test_vertex_coordinates_invalid_handle() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let invalid_handle = DelaunayVertexHandle {
+            id: uuid::Uuid::new_v4(),
+        };
+        let result = backend.vertex_coordinates(&invalid_handle);
+        assert!(result.is_err(), "Should error for invalid vertex handle");
+    }
+
+    #[test]
+    fn test_face_vertices() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let faces: Vec<_> = backend.faces().collect();
+        assert!(!faces.is_empty(), "Should have at least one face");
+
+        for face in &faces {
+            let vertices = backend
+                .face_vertices(face)
+                .expect("Should retrieve vertices for valid face");
+            assert_eq!(vertices.len(), 3, "2D face should have exactly 3 vertices");
+
+            // Verify all vertices are unique
+            let unique_count = vertices
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len();
+            assert_eq!(
+                unique_count,
+                vertices.len(),
+                "Face vertices should be unique"
+            );
+        }
+    }
+
+    #[test]
+    fn test_face_vertices_invalid_handle() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let invalid_handle = DelaunayFaceHandle {
+            id: uuid::Uuid::new_v4(),
+        };
+        let result = backend.face_vertices(&invalid_handle);
+        assert!(result.is_err(), "Should error for invalid face handle");
+    }
+
+    #[test]
+    fn test_edge_endpoints() {
+        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let edges: Vec<_> = backend.edges().collect();
+        assert!(!edges.is_empty(), "Should have at least one edge");
+
+        for edge in &edges {
+            let (v1, v2) = backend
+                .edge_endpoints(edge)
+                .expect("Should retrieve endpoints for valid edge");
+            assert_ne!(v1, v2, "Edge endpoints should be different");
+
+            // Verify endpoints exist in vertex list
+            let vertices: Vec<_> = backend.vertices().collect();
+            assert!(
+                vertices.contains(&v1),
+                "First endpoint should be a valid vertex"
+            );
+            assert!(
+                vertices.contains(&v2),
+                "Second endpoint should be a valid vertex"
+            );
+        }
+    }
+
+    #[test]
+    fn test_edge_endpoints_invalid_handle() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let invalid_handle = DelaunayEdgeHandle { id: 999_999 };
+        let result = backend.edge_endpoints(&invalid_handle);
+        assert!(result.is_err(), "Should error for invalid edge handle");
+    }
+
+    #[test]
+    fn test_adjacent_faces() {
+        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let vertices: Vec<_> = backend.vertices().collect();
+        assert!(!vertices.is_empty(), "Should have at least one vertex");
+
+        for vertex in &vertices {
+            let adjacent = backend
+                .adjacent_faces(vertex)
+                .expect("Should retrieve adjacent faces for valid vertex");
+            assert!(
+                !adjacent.is_empty(),
+                "Each vertex should have at least one adjacent face"
+            );
+
+            // Verify each adjacent face contains this vertex
+            for face_handle in &adjacent {
+                let face_vertices = backend
+                    .face_vertices(face_handle)
+                    .expect("Should retrieve face vertices");
+                assert!(
+                    face_vertices.contains(vertex),
+                    "Adjacent face should contain the vertex"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_incident_edges() {
+        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let vertices: Vec<_> = backend.vertices().collect();
+        assert!(!vertices.is_empty(), "Should have at least one vertex");
+
+        for vertex in &vertices {
+            let incident = backend
+                .incident_edges(vertex)
+                .expect("Should retrieve incident edges for valid vertex");
+            assert!(
+                !incident.is_empty(),
+                "Each vertex should have at least one incident edge"
+            );
+
+            // Verify each incident edge has this vertex as an endpoint
+            for edge_handle in &incident {
+                let (v1, v2) = backend
+                    .edge_endpoints(edge_handle)
+                    .expect("Should retrieve edge endpoints");
+                assert!(
+                    v1 == *vertex || v2 == *vertex,
+                    "Incident edge should have vertex as an endpoint"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_face_neighbors() {
+        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let faces: Vec<_> = backend.faces().collect();
+        assert!(!faces.is_empty(), "Should have at least one face");
+
+        for face in &faces {
+            let neighbors = backend
+                .face_neighbors(face)
+                .expect("Should retrieve neighbors for valid face");
+
+            // In a 2D triangulation, each face can have 0-3 neighbors
+            assert!(
+                neighbors.len() <= 3,
+                "A 2D face should have at most 3 neighbors"
+            );
+
+            // Verify neighbors are valid faces
+            let all_faces: std::collections::HashSet<_> = backend.faces().collect();
+            for neighbor in &neighbors {
+                assert!(
+                    all_faces.contains(neighbor),
+                    "Neighbor should be a valid face"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_face_neighbors_invalid_handle() {
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let invalid_handle = DelaunayFaceHandle {
+            id: uuid::Uuid::new_v4(),
+        };
+        let result = backend.face_neighbors(&invalid_handle);
+        assert!(result.is_err(), "Should error for invalid face handle");
+    }
+
+    #[test]
+    fn test_topology_consistency() {
+        // Test that topology is consistent across different query methods
+        let tds = generate_random_delaunay2(6, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        let vertex_count = backend.vertex_count();
+        let edge_count = backend.edge_count();
+        let face_count = backend.face_count();
+
+        // Verify Euler characteristic for planar graphs
+        // For a triangulation without the outer infinite face: V - E + F = 1
+        // For a triangulation with the outer infinite face: V - E + F = 2
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let euler = vertex_count as i32 - edge_count as i32 + face_count as i32;
+        assert!(
+            euler == 1 || euler == 2,
+            "Euler characteristic should be 1 or 2 for planar triangulation, got {euler} (V={vertex_count}, E={edge_count}, F={face_count})"
+        );
+
+        // Count edges through incident_edges (should match total edge count)
+        let mut edge_set = std::collections::HashSet::new();
+        for vertex in backend.vertices() {
+            if let Ok(incident) = backend.incident_edges(&vertex) {
+                edge_set.extend(incident);
+            }
+        }
+        assert_eq!(
+            edge_set.len(),
+            edge_count,
+            "Total edges from incident_edges should match edge_count"
+        );
+    }
+
+    #[test]
+    fn test_minimal_triangulation_queries() {
+        // Test with minimal valid triangulation (3 vertices, 1 face)
+        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_tds(tds);
+
+        // Test all vertices are accessible
+        let vertices: Vec<_> = backend.vertices().collect();
+        assert_eq!(vertices.len(), 3, "Should have exactly 3 vertices");
+
+        // Test all edges are accessible
+        let edges: Vec<_> = backend.edges().collect();
+        assert_eq!(edges.len(), 3, "Should have exactly 3 edges");
+
+        // Test face is accessible
+        let faces: Vec<_> = backend.faces().collect();
+        assert_eq!(faces.len(), 1, "Should have exactly 1 face");
+
+        // Verify face has all 3 vertices
+        let face_vertices = backend
+            .face_vertices(&faces[0])
+            .expect("Should get face vertices");
+        assert_eq!(face_vertices.len(), 3, "Face should have 3 vertices");
     }
 }

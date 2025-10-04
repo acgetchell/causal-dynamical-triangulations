@@ -79,6 +79,8 @@
         "shellcheck",
         "shfmt",
         "smallvec",
+        "spacelike",
+        "Spacelike",
         "spacetimes",
         "sqlfluff",
         "sqrtf",

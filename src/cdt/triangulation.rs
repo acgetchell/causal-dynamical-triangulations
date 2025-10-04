@@ -195,11 +195,93 @@ impl<B: TriangulationMut> CdtTriangulation<B> {
             ));
         }
 
-        // TODO: Implement additional CDT property validation
-        // - Check topology (Euler characteristic)
-        // - Check causality constraints
-        // - Check foliation consistency
+        // Additional CDT property validation
+        self.validate_topology()?;
+        self.validate_causality()?;
+        self.validate_foliation()?;
 
+        Ok(())
+    }
+    /// Validate topology properties
+    ///
+    /// Checks that the triangulation satisfies expected topological constraints,
+    /// including the Euler characteristic for the given dimension and boundary conditions.
+    ///
+    /// # Errors
+    /// Returns error if topology validation fails
+    fn validate_topology(&self) -> CdtResult<()> {
+        let euler_char = self.geometry.euler_characteristic();
+
+        // For 2D triangulations with boundary, expect χ = 1
+        // For closed 2D manifolds, expect χ = 2 (sphere topology)
+        // TODO: Implement proper topology validation based on dimension and boundary conditions
+        // Currently, we just cache the value and accept any valid triangulation
+
+        if self.dimension() == 2 {
+            // Planar triangulation with boundary should have χ = 1
+            // This is a placeholder check - needs refinement based on boundary detection
+            if euler_char != 1 && euler_char != 2 {
+                return Err(crate::errors::CdtError::InvalidParameters(format!(
+                    "Invalid topology: Euler characteristic {euler_char} unexpected for 2D triangulation"
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate causality constraints
+    ///
+    /// Checks that the triangulation satisfies causal structure requirements:
+    /// - Timelike edges connect vertices in adjacent time slices
+    /// - Spacelike edges connect vertices within the same time slice
+    /// - No closed timelike curves exist
+    ///
+    /// # Errors
+    /// Returns error if causality constraints are violated
+    #[allow(
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        clippy::unused_self
+    )]
+    fn validate_causality(&self) -> CdtResult<()> {
+        // TODO: Implement causality validation
+        // This requires:
+        // 1. Time slice assignment for each vertex
+        // 2. Classification of edges as timelike or spacelike
+        // 3. Verification that timelike edges only connect adjacent slices
+        // 4. Check for closed timelike curves (cycles in the timelike graph)
+
+        // For now, this is a placeholder that always succeeds
+        // The actual implementation will need vertex time labels from the foliation
+        Ok(())
+    }
+
+    /// Validate foliation consistency
+    ///
+    /// Checks that the triangulation has a valid foliation structure:
+    /// - All vertices are assigned to exactly one time slice
+    /// - Time slices are properly ordered (0 to time_slices-1)
+    /// - Each time slice contains at least one vertex
+    /// - Spatial topology is consistent across slices
+    ///
+    /// # Errors
+    /// Returns error if foliation structure is invalid
+    #[allow(
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        clippy::unused_self
+    )]
+    fn validate_foliation(&self) -> CdtResult<()> {
+        // TODO: Implement foliation validation
+        // This requires:
+        // 1. Access to vertex time labels (currently not stored in geometry backend)
+        // 2. Verification that all vertices are labeled with valid time values
+        // 3. Check that each time slice is non-empty
+        // 4. Verify spatial topology consistency (same genus) across slices
+
+        // For now, this is a placeholder that always succeeds
+        // The actual implementation needs the backend to expose time slice information
         Ok(())
     }
 
@@ -255,9 +337,17 @@ impl CdtTriangulation<crate::geometry::backends::delaunay::DelaunayBackend2D> {
         use crate::geometry::backends::delaunay::DelaunayBackend;
         use crate::triangulations::triangulation::try_generate_random_delaunay2_with_context;
 
+        // Validate dimension first
         if dimension != 2 {
             return Err(crate::errors::CdtError::UnsupportedDimension(
                 dimension.into(),
+            ));
+        }
+
+        // Validate other parameters
+        if vertices < 3 {
+            return Err(crate::errors::CdtError::InvalidParameters(
+                "vertices must be >= 3 for 2D triangulation".to_string(),
             ));
         }
 
