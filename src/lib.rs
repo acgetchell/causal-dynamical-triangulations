@@ -101,9 +101,16 @@ pub use cdt::triangulation::CdtTriangulation;
 ///
 /// # Errors
 ///
+/// Returns [`CdtError::InvalidParameters`] if the configuration fails validation
+/// (e.g., invalid measurement frequency, inconsistent parameters).
 /// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
 /// Returns triangulation generation errors from the underlying triangulation creation.
 pub fn run_simulation(config: &CdtConfig) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
+    // Validate configuration early to fail fast with clear error messages
+    if let Err(err) = config.validate() {
+        return Err(CdtError::InvalidParameters(err));
+    }
+
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
@@ -208,6 +215,82 @@ mod lib_tests {
         let results = run_simulation(&config).expect("Failed to run triangulation");
         // Check that we have some triangles
         assert!(results.triangulation.face_count() > 0);
+    }
+
+    #[test]
+    fn test_config_validation_invalid_measurement_frequency() {
+        let mut config = create_test_config();
+        config.measurement_frequency = 0;
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject zero measurement frequency");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("Measurement frequency must be positive"),
+                "Error message should mention measurement frequency: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_measurement_frequency_too_large() {
+        let mut config = create_test_config();
+        config.steps = 100;
+        config.measurement_frequency = 200; // Greater than steps
+
+        let result = run_simulation(&config);
+        assert!(
+            result.is_err(),
+            "Should reject measurement frequency greater than steps"
+        );
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("cannot be greater than total steps"),
+                "Error message should mention steps constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_invalid_vertices() {
+        let mut config = create_test_config();
+        config.vertices = 2; // Less than minimum of 3
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject too few vertices");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("vertices must be at least 3"),
+                "Error message should mention vertex constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_negative_temperature() {
+        let mut config = create_test_config();
+        config.temperature = -1.0;
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject negative temperature");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("Temperature must be positive"),
+                "Error message should mention temperature constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
     }
 
     #[test]

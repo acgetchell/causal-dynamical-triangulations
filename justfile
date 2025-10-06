@@ -108,7 +108,7 @@ commit-check: quality test-all
     @echo "🚀 Ready to commit! All checks passed."
 
 # CI simulation (run what CI runs)
-ci: quality test-release bench-compile
+ci: quality test-release bench-compile kani-fast
     @echo "🎯 CI simulation complete!"
 
 # Development workflow

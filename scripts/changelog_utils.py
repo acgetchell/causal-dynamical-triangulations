@@ -892,8 +892,9 @@ def _parse_generate_args():
 
     try:
         return parser.parse_args(args_to_parse)
-    except SystemExit:
-        sys.exit(0)
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        sys.exit(code)
 
 
 def _show_help() -> None:

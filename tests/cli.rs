@@ -80,3 +80,85 @@ fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn cdt_cli_invalid_measurement_frequency_zero() -> Result<(), Box<dyn std::error::Error>> {
+    // Note: This would be caught by clap's range validation now,
+    // but we test the error message for completeness
+    let mut cmd = Command::cargo_bin("cdt-rs")?;
+
+    cmd.arg("--vertices").arg("10");
+    cmd.arg("--timeslices").arg("3");
+    cmd.arg("--measurement-frequency").arg("0");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("0 is not in 1.."));
+
+    Ok(())
+}
+
+#[test]
+fn cdt_cli_invalid_measurement_frequency_too_large() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::cargo_bin("cdt-rs")?;
+
+    cmd.arg("--vertices").arg("10");
+    cmd.arg("--timeslices").arg("3");
+    cmd.arg("--steps").arg("100");
+    cmd.arg("--measurement-frequency").arg("200");
+    cmd.arg("--simulate");
+
+    cmd.assert().failure().stderr(predicate::str::contains(
+        "Measurement frequency cannot be greater than total steps",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn cdt_cli_invalid_vertices_too_few() -> Result<(), Box<dyn std::error::Error>> {
+    // This should be caught by clap's range validation
+    let mut cmd = Command::cargo_bin("cdt-rs")?;
+
+    cmd.arg("--vertices").arg("2");
+    cmd.arg("--timeslices").arg("3");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("2 is not in 3.."));
+
+    Ok(())
+}
+
+#[test]
+fn cdt_cli_invalid_timeslices_zero() -> Result<(), Box<dyn std::error::Error>> {
+    // This should be caught by clap's range validation
+    let mut cmd = Command::cargo_bin("cdt-rs")?;
+
+    cmd.arg("--vertices").arg("10");
+    cmd.arg("--timeslices").arg("0");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("0 is not in 1.."));
+
+    Ok(())
+}
+
+#[test]
+fn cdt_cli_config_validation_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+    // Test a complex scenario with valid parameters to ensure our validation doesn't break normal usage
+    let mut cmd = Command::cargo_bin("cdt-rs")?;
+
+    cmd.arg("--vertices").arg("10");
+    cmd.arg("--timeslices").arg("3");
+    cmd.arg("--steps").arg("50");
+    cmd.arg("--measurement-frequency").arg("5");
+    cmd.arg("--temperature").arg("1.5");
+    cmd.arg("--thermalization-steps").arg("10");
+    cmd.env("RUST_LOG", "error"); // Reduce log noise
+
+    cmd.assert().success();
+
+    Ok(())
+}

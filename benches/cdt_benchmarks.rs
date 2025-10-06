@@ -34,7 +34,8 @@ fn bench_triangulation_creation(c: &mut Criterion) {
                         black_box(vertex_count),
                         black_box(1),
                         black_box(2),
-                    );
+                    )
+                    .expect("Failed to create triangulation");
                     black_box(triangulation)
                 });
             },
@@ -334,7 +335,7 @@ fn bench_validation(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("validation");
 
-    group.bench_function("validate_cdt_properties", |b| {
+    group.bench_function("validate", |b| {
         b.iter(|| {
             let result = triangulation.validate();
             black_box(result)

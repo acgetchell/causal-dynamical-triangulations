@@ -6,7 +6,7 @@
   "backfillLimit": false,
   "tagPrefix": "v",
   "sortCommits": "date",
-  "ignoreCommitPattern": "^(chore|docs|style|test|ci):",
+  "ignoreCommitPattern": "^(chore|style|test):",
   "includeBranch": ["main", "master"],
   "replaceText": {
     "feat": "✨ Features",

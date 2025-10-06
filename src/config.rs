@@ -44,7 +44,7 @@ pub struct CdtConfig {
     pub thermalization_steps: u32,
 
     /// Measurement frequency (take measurement every N steps)
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(u32).range(1..))]
     pub measurement_frequency: u32,
 
     /// Coupling constant κ₀ for vertices in the action
@@ -267,6 +267,12 @@ mod tests {
             ..CdtConfig::new(32, 3)
         };
         assert!(invalid_temperature.validate().is_err());
+
+        let invalid_measurement_frequency = CdtConfig {
+            measurement_frequency: 0,
+            ..CdtConfig::new(32, 3)
+        };
+        assert!(invalid_measurement_frequency.validate().is_err());
     }
 
     #[test]
