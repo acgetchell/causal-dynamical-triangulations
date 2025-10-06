@@ -27,3 +27,6 @@ venv/
 *.egg
 dist/
 build/
+
+# Coverage reports
+*.profraw

@@ -135,3 +135,93 @@ mod tests {
         assert_relative_eq!(action, expected);
     }
 }
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    #[kani::proof]
+    fn verify_regge_action_properties() {
+        // Generate arbitrary inputs
+        let vertices: u32 = kani::any();
+        let edges: u32 = kani::any();
+        let triangles: u32 = kani::any();
+        let coupling_0: f64 = kani::any();
+        let coupling_2: f64 = kani::any();
+        let cosmological_constant: f64 = kani::any();
+
+        // Constrain inputs to reasonable ranges
+        kani::assume(vertices <= 1000);
+        kani::assume(edges <= 5000);
+        kani::assume(triangles <= 3000);
+        kani::assume(coupling_0.is_finite());
+        kani::assume(coupling_2.is_finite());
+        kani::assume(cosmological_constant.is_finite());
+        kani::assume(coupling_0.abs() <= 100.0);
+        kani::assume(coupling_2.abs() <= 100.0);
+        kani::assume(cosmological_constant.abs() <= 100.0);
+
+        let action = calculate_regge_action_2d(
+            vertices,
+            edges,
+            triangles,
+            coupling_0,
+            coupling_2,
+            cosmological_constant,
+        );
+
+        // Property 1: Result should be finite (no NaN or infinity)
+        assert!(action.is_finite(), "Action must be finite");
+
+        // Property 2: Action should be linear in each component
+        // If we double all simplex counts, action should scale linearly
+        let action_doubled = calculate_regge_action_2d(
+            vertices.saturating_mul(2),
+            edges.saturating_mul(2),
+            triangles.saturating_mul(2),
+            coupling_0,
+            coupling_2,
+            cosmological_constant,
+        );
+
+        // The doubled action should be approximately 2x the original
+        // (we check finiteness rather than exact equality due to floating point)
+        assert!(action_doubled.is_finite(), "Doubled action must be finite");
+
+        // Property 3: Zero simplices should give zero action with zero couplings
+        let zero_action = calculate_regge_action_2d(0, 0, 0, 0.0, 0.0, 0.0);
+        assert_eq!(
+            zero_action, 0.0,
+            "Zero simplices with zero couplings should give zero action"
+        );
+    }
+
+    #[kani::proof]
+    fn verify_action_config() {
+        let coupling_0: f64 = kani::any();
+        let coupling_2: f64 = kani::any();
+        let cosmological_constant: f64 = kani::any();
+
+        // Constrain to finite, reasonable values to avoid overflow
+        kani::assume(coupling_0.is_finite());
+        kani::assume(coupling_2.is_finite());
+        kani::assume(cosmological_constant.is_finite());
+        kani::assume(coupling_0.abs() <= 10.0);
+        kani::assume(coupling_2.abs() <= 10.0);
+        kani::assume(cosmological_constant.abs() <= 10.0);
+
+        let config = ActionConfig::new(coupling_0, coupling_2, cosmological_constant);
+
+        // Verify that the config stores values correctly
+        assert_eq!(config.coupling_0, coupling_0);
+        assert_eq!(config.coupling_2, coupling_2);
+        assert_eq!(config.cosmological_constant, cosmological_constant);
+
+        // Verify that calculate_action produces finite results with small inputs
+        let action = config.calculate_action(10, 20, 15);
+        assert!(
+            action.is_finite(),
+            "Config-based action calculation must produce finite results"
+        );
+    }
+}

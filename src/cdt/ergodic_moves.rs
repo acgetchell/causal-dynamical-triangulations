@@ -5,7 +5,9 @@
 //! - (1,3) moves: Add/remove vertex with triangle subdivision
 //! - Edge flips: Standard Delaunay edge flips maintaining causality
 
+use crate::errors::CdtError;
 use crate::util::generate_random_float;
+use num_traits::cast::NumCast;
 use rand::Rng;
 
 /// Types of ergodic moves available in 2D CDT.
@@ -22,7 +24,7 @@ pub enum MoveType {
 }
 
 /// Result of attempting an ergodic move.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MoveResult {
     /// Move was successfully applied
     Success,
@@ -31,7 +33,7 @@ pub enum MoveResult {
     /// Move was rejected due to geometric constraints
     GeometricViolation,
     /// Move was rejected for other reasons
-    Rejected(String),
+    Rejected(CdtError),
 }
 
 /// Statistics tracking for ergodic moves.
@@ -83,6 +85,10 @@ impl MoveStatistics {
     }
 
     /// Calculates acceptance rate for a specific move type.
+    ///
+    /// # Panics
+    ///
+    /// This function should never panic as u64 to f64 conversion is always valid.
     #[must_use]
     pub fn acceptance_rate(&self, move_type: MoveType) -> f64 {
         let (attempted, accepted) = match move_type {
@@ -95,12 +101,17 @@ impl MoveStatistics {
         if attempted == 0 {
             0.0
         } else {
-            f64::from(u32::try_from(accepted).unwrap_or_default())
-                / f64::from(u32::try_from(attempted).unwrap_or_default())
+            <f64 as NumCast>::from(accepted).expect("u64 to f64 conversion should never fail")
+                / <f64 as NumCast>::from(attempted)
+                    .expect("u64 to f64 conversion should never fail")
         }
     }
 
     /// Calculates overall acceptance rate.
+    ///
+    /// # Panics
+    ///
+    /// This function should never panic as u64 to f64 conversion is always valid.
     #[must_use]
     pub fn total_acceptance_rate(&self) -> f64 {
         let total_attempted = self.moves_22_attempted
@@ -115,8 +126,9 @@ impl MoveStatistics {
         if total_attempted == 0 {
             0.0
         } else {
-            f64::from(u32::try_from(total_accepted).unwrap_or_default())
-                / f64::from(u32::try_from(total_attempted).unwrap_or_default())
+            <f64 as NumCast>::from(total_accepted).expect("u64 to f64 conversion should never fail")
+                / <f64 as NumCast>::from(total_attempted)
+                    .expect("u64 to f64 conversion should never fail")
         }
     }
 }
@@ -154,16 +166,25 @@ impl ErgodicsSystem {
     ///
     /// A (2,2) move flips an edge between two triangles, changing the
     /// local triangulation while preserving the number of vertices.
+    ///
+    /// **Note**: This is currently a placeholder implementation for testing.
+    /// Full integration with delaunay crate Tds is planned for future versions.
     pub fn attempt_22_move(&mut self, _triangulation: &mut Vec<Vec<usize>>) -> MoveResult {
         self.stats.record_attempt(MoveType::Move22);
 
-        // TODO: Implement actual (2,2) move logic with delaunay integration
-        // For now, randomly accept/reject to test the framework
-        if generate_random_float() > 0.5 {
+        // Placeholder implementation: simulate move with realistic acceptance rate
+        // Real implementation would check geometric constraints and causality
+        let acceptance_probability = 0.6; // Typical acceptance rate for (2,2) moves
+        if generate_random_float() < acceptance_probability {
             self.stats.record_success(MoveType::Move22);
             MoveResult::Success
         } else {
-            MoveResult::CausalityViolation
+            // Randomly choose rejection reason based on typical CDT constraints
+            if generate_random_float() < 0.3 {
+                MoveResult::GeometricViolation
+            } else {
+                MoveResult::CausalityViolation
+            }
         }
     }
 
@@ -171,11 +192,15 @@ impl ErgodicsSystem {
     ///
     /// A (1,3) move adds a vertex by subdividing an existing triangle
     /// into three smaller triangles.
+    ///
+    /// **Note**: This is currently a placeholder implementation for testing.
+    /// Full integration with delaunay crate Tds is planned for future versions.
     pub fn attempt_13_move(&mut self, _triangulation: &mut Vec<Vec<usize>>) -> MoveResult {
         self.stats.record_attempt(MoveType::Move13Add);
 
-        // TODO: Implement actual (1,3) move logic with delaunay integration
-        if generate_random_float() > 0.3 {
+        // Placeholder implementation: (1,3) moves typically have high acceptance
+        let acceptance_probability = 0.8;
+        if generate_random_float() < acceptance_probability {
             self.stats.record_success(MoveType::Move13Add);
             MoveResult::Success
         } else {
@@ -187,15 +212,24 @@ impl ErgodicsSystem {
     ///
     /// A (3,1) move removes a vertex by merging its surrounding triangles
     /// into a single triangle.
+    ///
+    /// **Note**: This is currently a placeholder implementation for testing.
+    /// Full integration with delaunay crate Tds is planned for future versions.
     pub fn attempt_31_move(&mut self, _triangulation: &mut Vec<Vec<usize>>) -> MoveResult {
         self.stats.record_attempt(MoveType::Move31Remove);
 
-        // TODO: Implement actual (3,1) move logic with delaunay integration
-        if generate_random_float() > 0.4 {
+        // Placeholder implementation: (3,1) moves are more restrictive
+        let acceptance_probability = 0.4;
+        if generate_random_float() < acceptance_probability {
             self.stats.record_success(MoveType::Move31Remove);
             MoveResult::Success
         } else {
-            MoveResult::CausalityViolation
+            // (3,1) moves often rejected due to causality constraints
+            if generate_random_float() < 0.7 {
+                MoveResult::CausalityViolation
+            } else {
+                MoveResult::GeometricViolation
+            }
         }
     }
 
@@ -203,11 +237,15 @@ impl ErgodicsSystem {
     ///
     /// An edge flip maintains the Delaunay property while potentially
     /// changing the causal structure.
+    ///
+    /// **Note**: This is currently a placeholder implementation for testing.
+    /// Full integration with delaunay crate Tds is planned for future versions.
     pub fn attempt_edge_flip(&mut self, _triangulation: &mut Vec<Vec<usize>>) -> MoveResult {
         self.stats.record_attempt(MoveType::EdgeFlip);
 
-        // TODO: Implement actual edge flip logic with delaunay integration
-        if generate_random_float() > 0.2 {
+        // Placeholder implementation: Edge flips generally have good acceptance
+        let acceptance_probability = 0.7;
+        if generate_random_float() < acceptance_probability {
             self.stats.record_success(MoveType::EdgeFlip);
             MoveResult::Success
         } else {
@@ -261,7 +299,7 @@ mod tests {
         let result = system.attempt_22_move(&mut triangulation);
         assert!(matches!(
             result,
-            MoveResult::Success | MoveResult::CausalityViolation
+            MoveResult::Success | MoveResult::CausalityViolation | MoveResult::GeometricViolation
         ));
 
         // Check that statistics are updated

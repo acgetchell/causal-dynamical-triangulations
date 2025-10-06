@@ -25,10 +25,11 @@ fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
     cmd.arg("32");
     cmd.arg("-t");
     cmd.arg("3");
+    cmd.env("RUST_LOG", "info");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Triangle"));
+        .stderr(predicate::str::contains("faces"));
 
     Ok(())
 }
@@ -73,9 +74,9 @@ fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
     cmd.arg("-d");
     cmd.arg("3");
 
-    cmd.assert().failure().stderr(predicate::str::contains(
-        "Only 2D triangulations are supported right now.",
-    ));
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Unsupported dimension: 3"));
 
     Ok(())
 }
