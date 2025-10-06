@@ -184,9 +184,19 @@ mod kani_proofs {
             cosmological_constant,
         );
 
-        // The doubled action should be approximately 2x the original
-        // (we check finiteness rather than exact equality due to floating point)
+        // The doubled action should be finite
         assert!(action_doubled.is_finite(), "Doubled action must be finite");
+
+        // Only verify linearity if no saturation occurred (no overflow)
+        if vertices <= u32::MAX / 2 && edges <= u32::MAX / 2 && triangles <= u32::MAX / 2 {
+            use approx::assert_relative_eq;
+            assert_relative_eq!(
+                action_doubled,
+                2.0 * action,
+                epsilon = f64::EPSILON,
+                "Doubling simplex counts should double the action due to linearity"
+            );
+        }
 
         // Property 3: Zero simplices should give zero action with zero couplings
         let zero_action = calculate_regge_action_2d(0, 0, 0, 0.0, 0.0, 0.0);

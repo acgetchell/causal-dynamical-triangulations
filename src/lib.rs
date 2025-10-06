@@ -51,6 +51,16 @@ pub mod geometry {
         /// Mock backend for testing.
         pub mod mock;
     }
+
+    // Type aliases for common backend combinations
+    /// 2D Delaunay backend with f64 coordinates (most common configuration)
+    pub type DelaunayBackend2D = backends::delaunay::DelaunayBackend<f64, i32, i32, 2>;
+
+    /// Default backend type for 2D CDT simulations
+    pub type DefaultBackend = DelaunayBackend2D;
+
+    /// Convenient alias for CDT triangulations using the default backend
+    pub type CdtTriangulation2D = crate::cdt::triangulation::CdtTriangulation<DefaultBackend>;
 }
 
 /// Causal Dynamical Triangulations implementation modules.
