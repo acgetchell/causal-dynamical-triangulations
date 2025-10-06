@@ -98,14 +98,14 @@ jobs:
           chmod +x shfmt
           sudo mv shfmt /usr/local/bin/
 
-      # - name: Lint shell scripts
-      #   if: matrix.os == 'ubuntu-latest'
-      #   run: |
-      #     # Lint shell scripts with shellcheck
-      #     find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
+      - name: Lint shell scripts
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Lint shell scripts with shellcheck
+          find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
-      #     # Check shell script formatting with shfmt
-      #     find scripts -type f -name '*.sh' -exec shfmt -d {} +
+          # Check shell script formatting with shfmt
+          find scripts -type f -name '*.sh' -exec shfmt -d {} +
 
       - name: Lint Markdown files
         if: matrix.os == 'ubuntu-latest'

@@ -56,28 +56,59 @@ causal-dynamical-triangulations = { git = "https://github.com/acgetchell/causal-
 > causal-dynamical-triangulations = "0.x"
 > ```
 
-### Minimum example (sketch)
+### Library Usage Example
+
+See [`examples/basic_cdt.rs`](examples/basic_cdt.rs) for a complete working example:
 
 ```rust
-// Pseudocode – API will evolve
-use causal_dynamical_triangulations as cdt;
+use causal_dynamical_triangulations::{
+    CdtConfig, MetropolisConfig, ActionConfig, MetropolisAlgorithm,
+    geometry::CdtTriangulation2D,
+};
 
-fn main() {
-    // 1) Build initial 2D slice from points/constraints via Delaunay backend
-    // let tri2d = cdt::geom::delaunay::from_points(points);
-
-    // 2) Lift to 1+1 foliation with time labels
-    // let foliation = cdt::foliation::from_triangulation(tri2d, /*slices=*/N);
-
-    // 3) Perform ergodic moves + Metropolis–Hastings
-    // let mut state = cdt::state::from_foliation(foliation);
-    // cdt::mcmc::run(&mut state, steps, beta);
-
-    // 4) Measure observables
-    // let obs = cdt::observables::measure(&state);
-    // println!("{:?}", obs);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create triangulation
+    let triangulation = CdtTriangulation2D::new_with_delaunay(10, 1, 2)?;
+    
+    // Configure simulation
+    let metropolis_config = MetropolisConfig::new(1.0, 1000, 100, 10);
+    let action_config = ActionConfig::default();
+    let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
+    
+    // Run simulation
+    let results = algorithm.run_simulation_with_backend(triangulation);
+    
+    println!("Acceptance rate: {:.3}", results.acceptance_rate());
+    println!("Average action: {:.3}", results.average_action());
+    Ok(())
 }
 ```
+
+### Command Line Interface
+
+The project includes a `cdt-rs` binary for running simulations from the command line:
+
+```bash
+# Build the binary
+cargo build --release
+
+# Run a basic simulation
+./target/release/cdt-rs --vertices 20 --timeslices 10 --steps 2000 --simulate
+
+# With custom physics parameters
+./target/release/cdt-rs \
+  --vertices 50 --timeslices 12 \
+  --temperature 1.5 --coupling-0 0.8 \
+  --steps 5000 --simulate
+```
+
+**Ready-to-use scripts:**
+
+- [`examples/scripts/basic_simulation.sh`](examples/scripts/basic_simulation.sh) - Simple test run
+- [`examples/scripts/parameter_sweep.sh`](examples/scripts/parameter_sweep.sh) - Temperature sweep study
+- [`examples/scripts/performance_test.sh`](examples/scripts/performance_test.sh) - Performance benchmarking
+
+See [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) for comprehensive CLI documentation.
 
 ## Roadmap
 
@@ -119,9 +150,31 @@ cargo clippy --all-targets -- -D warnings
 # Test
 cargo test --all
 
+# Run benchmarks
+cargo bench
+
 # Kani proofs (if configured)
 cargo kani --all
 ```
+
+### Benchmarking
+
+Comprehensive performance benchmarks are available using criterion:
+
+```bash
+# Run all benchmarks
+cargo bench
+
+# Specific benchmark categories
+cargo bench triangulation_creation
+cargo bench edge_counting
+cargo bench metropolis_simulation
+
+# Generate HTML reports
+cargo bench -- --output-format html
+```
+
+See [`benches/README.md`](benches/README.md) for detailed benchmarking documentation.
 
 ## References
 

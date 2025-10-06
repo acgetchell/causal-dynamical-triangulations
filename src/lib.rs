@@ -25,6 +25,9 @@
 use clap::Parser;
 
 // Module declarations (avoiding mod.rs files)
+/// Configuration management for CDT simulations.
+pub mod config;
+
 /// Error types for the CDT library.
 pub mod errors;
 
@@ -79,15 +82,23 @@ pub mod cdt {
 pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResultsBackend};
+pub use config::{CdtConfig, TestConfig};
 pub use errors::{CdtError, CdtResult};
 
 // Trait-based triangulation (recommended)
 pub use cdt::triangulation::CdtTriangulation;
 
+/// Compatibility alias for the old Config struct.
+///
+/// **Deprecated**: Use `CdtConfig` instead. This alias is provided for backward compatibility.
+pub type Config = CdtConfig;
+
+/// Legacy Config struct kept for backward compatibility.
+///
+/// **Deprecated**: Use `CdtConfig` directly instead.
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-/// Configuration options for the `cdt-rs` crate.
-pub struct Config {
+pub struct LegacyConfig {
     /// Dimensionality of the triangulation
     #[arg(short, long, value_parser = clap::value_parser!(u8).range(2..4))]
     dimension: Option<u8>,
@@ -133,7 +144,7 @@ pub struct Config {
     simulate: bool,
 }
 
-impl Config {
+impl LegacyConfig {
     /// Builds a new instance of `Config`.
     #[must_use]
     pub fn build() -> Self {
@@ -175,7 +186,9 @@ impl Config {
 ///
 /// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
 /// Returns triangulation generation errors from the underlying triangulation creation.
-pub fn run_with_backend(config: &Config) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
+pub fn run_with_backend(
+    config: &CdtConfig,
+) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
@@ -249,8 +262,8 @@ mod lib_tests {
     use super::*;
     use approx::assert_relative_eq;
 
-    fn create_test_config() -> Config {
-        Config {
+    fn create_test_config() -> CdtConfig {
+        CdtConfig {
             dimension: Some(2),
             vertices: 32,
             timeslices: 3,

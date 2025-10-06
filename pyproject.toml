@@ -8,13 +8,21 @@ version = "0.1.0"
 description = "Python utility scripts for the causal-dynamical-triangulations Rust library"
 readme = "README.md"
 requires-python = ">=3.13"
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
 authors = [
     {name = "Adam Getchell", email = "adam@adamgetchell.org"},
 ]
 
 # Project dependencies - minimal for TOML validation
 dependencies = []
+
+# Explicitly define modules for setuptools
+[tool.setuptools]
+package-dir = {"" = "scripts"}
+py-modules = ["changelog_utils", "subprocess_utils", "enhance_commits"]
+
+[project.scripts]
+changelog-utils = "changelog_utils:main"
 
 [project.urls]
 "Homepage" = "https://github.com/acgetchell/causal-dynamical-triangulations"
