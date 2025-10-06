@@ -64,6 +64,12 @@ test-release:
 test-cli:
     cargo test --test cli --verbose
 
+kani:
+    cargo kani
+
+kani-fast:
+    cargo kani --harness verify_action_config
+
 test-all: test test-cli
     @echo "✅ All tests passed!"
 
@@ -123,6 +129,8 @@ help-workflows:
     @echo "  just ci            # Simulate CI pipeline"
     @echo "  just quality       # All quality checks"
     @echo "  just test-all      # All tests"
+    @echo "  just kani          # Run all Kani formal verification proofs"
+    @echo "  just kani-fast     # Run fast Kani verification (ActionConfig only)"
     @echo "  just coverage      # Generate coverage report"
     @echo "  just run-example   # Run with example arguments"
     @echo "  just run -- <args> # Run with custom arguments"

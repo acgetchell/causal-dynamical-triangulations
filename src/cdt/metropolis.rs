@@ -8,7 +8,7 @@ use crate::cdt::ergodic_moves::{ErgodicsSystem, MoveType};
 use num_traits::cast::NumCast;
 use std::time::Instant;
 
-// Test utilities are now handled through backend-agnostic CdtTriangulation::new_with_delaunay
+// Test utilities are now handled through backend-agnostic CdtTriangulation::new
 
 /// Configuration for the Metropolis-Hastings algorithm.
 #[derive(Debug, Clone)]
@@ -91,72 +91,6 @@ pub struct Measurement {
     pub triangles: u32,
 }
 
-/// Results from a complete Metropolis simulation (legacy Tds-based interface).
-///
-/// **DEPRECATED**: Use `SimulationResultsBackend` instead for better abstraction.
-/// This struct is kept for backward compatibility but will be removed in a future version.
-#[derive(Debug)]
-#[deprecated(note = "Use SimulationResultsBackend instead for better backend abstraction")]
-pub struct SimulationResults {
-    /// Configuration used for the simulation
-    pub config: MetropolisConfig,
-    /// Action configuration used
-    pub action_config: ActionConfig,
-    /// All Monte Carlo steps performed
-    pub steps: Vec<MonteCarloStep>,
-    /// Measurements taken during simulation
-    pub measurements: Vec<Measurement>,
-    /// Total simulation time
-    pub elapsed_time: std::time::Duration,
-    /// Final triangulation as measurements only (raw Tds removed)
-    pub final_measurements: Measurement,
-}
-
-#[allow(deprecated)]
-impl SimulationResults {
-    /// Calculates the acceptance rate for the simulation.
-    #[must_use]
-    pub fn acceptance_rate(&self) -> f64 {
-        if self.steps.is_empty() {
-            return 0.0;
-        }
-
-        let accepted_count = self.steps.iter().filter(|step| step.accepted).count();
-        let total_count = self.steps.len();
-
-        // Use NumCast for safe conversion without precision loss warnings
-        let accepted_f64 = NumCast::from(accepted_count).unwrap_or(0.0);
-        let total_f64 = NumCast::from(total_count).unwrap_or(1.0);
-
-        accepted_f64 / total_f64
-    }
-
-    /// Calculates the average action over all measurements.
-    #[must_use]
-    pub fn average_action(&self) -> f64 {
-        if self.measurements.is_empty() {
-            return 0.0;
-        }
-
-        let sum: f64 = self.measurements.iter().map(|m| m.action).sum();
-        let count = self.measurements.len();
-
-        // Use NumCast for safe conversion without precision loss warnings
-        let count_f64 = NumCast::from(count).unwrap_or(1.0);
-
-        sum / count_f64
-    }
-
-    /// Returns measurements after thermalization.
-    #[must_use]
-    pub fn equilibrium_measurements(&self) -> Vec<&Measurement> {
-        self.measurements
-            .iter()
-            .filter(|m| m.step >= self.config.thermalization_steps)
-            .collect()
-    }
-}
-
 /// Metropolis-Hastings algorithm implementation for CDT.
 ///
 /// This implementation works with both the legacy Tds-based approach
@@ -181,42 +115,10 @@ impl MetropolisAlgorithm {
         }
     }
 
-    /// Runs the complete Monte Carlo simulation (DEPRECATED).
+    /// Run the Monte Carlo simulation.
     ///
-    /// **DEPRECATED**: Use `run_simulation_with_backend()` instead for better abstraction.
-    /// This method is kept for backward compatibility but should not be used in new code.
-    #[deprecated(note = "Use run_simulation_with_backend() instead for better backend abstraction")]
-    #[allow(deprecated)]
-    #[must_use]
-    pub fn run_simulation_legacy(&self) -> SimulationResults {
-        let start_time = Instant::now();
-        let steps = Vec::new();
-        let measurements = vec![Measurement {
-            step: 0,
-            action: 0.0,
-            vertices: 0,
-            edges: 0,
-            triangles: 0,
-        }];
-
-        let elapsed_time = start_time.elapsed();
-        log::warn!("Legacy run_simulation_legacy() called - this is deprecated");
-
-        SimulationResults {
-            config: self.config.clone(),
-            action_config: self.action_config.clone(),
-            steps,
-            measurements: measurements.clone(),
-            elapsed_time,
-            final_measurements: measurements[0].clone(),
-        }
-    }
-
-    /// Run simulation with new trait-based `CdtTriangulation` (RECOMMENDED).
-    ///
-    /// This is the recommended interface that works with geometry backends.
-    /// Provides better abstraction than the legacy `run_simulation()` method.
-    pub fn run_simulation_with_backend(
+    /// This runs the Metropolis-Hastings algorithm on the given triangulation.
+    pub fn run(
         &mut self,
         triangulation: crate::geometry::CdtTriangulation2D,
     ) -> SimulationResultsBackend {
@@ -370,7 +272,7 @@ mod tests {
         use crate::geometry::traits::TriangulationQuery;
 
         let triangulation =
-            CdtTriangulation::new_with_delaunay(5, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 1, 2).expect("Failed to create triangulation");
         let geometry = triangulation.geometry();
 
         // Test that the backend-based counting methods work
@@ -383,15 +285,15 @@ mod tests {
         assert!(triangle_count > 0);
         assert!(edge_count > 0);
 
-        // For a valid 2D triangulation, verify Euler's formula: T - E + V = 1
+        // For a valid 2D triangulation, verify Euler's formula: V - E + F = 1
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let euler_check = triangle_count as i32 - edge_count as i32 + vertex_count as i32;
+        let euler_check = vertex_count as i32 - edge_count as i32 + triangle_count as i32;
 
-        // For a planar graph with boundary (not a closed surface), Euler's formula gives:
-        // χ = V - E + F = 1 (for a disk topology)
+        // For a planar graph with boundary (disk topology), Euler's formula gives:
+        // χ = V - E + F = 1
         assert_eq!(
             euler_check, 1,
-            "Euler's formula T - E + V = 1 failed for planar graph with boundary: {triangle_count} - {edge_count} + {vertex_count} = {euler_check} (expected 1)"
+            "Euler's formula V - E + F = 1 failed for planar graph with boundary: {vertex_count} - {edge_count} + {triangle_count} = {euler_check} (expected 1)"
         );
     }
 
@@ -401,7 +303,7 @@ mod tests {
         use crate::geometry::traits::TriangulationQuery;
 
         let triangulation =
-            CdtTriangulation::new_with_delaunay(5, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 1, 2).expect("Failed to create triangulation");
 
         let config = MetropolisConfig::default();
         let action_config = ActionConfig::default();
@@ -441,7 +343,7 @@ mod tests {
         ];
 
         let triangulation =
-            CdtTriangulation::new_with_delaunay(3, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(3, 1, 2).expect("Failed to create triangulation");
 
         let results = SimulationResultsBackend {
             config,

@@ -22,9 +22,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timeslices = 4;
     let dimension = 2;
 
-    // Create initial triangulation using the trait-based backend
+    // Create initial triangulation
     info!("Creating initial triangulation with {vertices} vertices and {timeslices} timeslices");
-    let triangulation = CdtTriangulation::new_with_delaunay(vertices, timeslices, dimension)?;
+    let triangulation = CdtTriangulation::from_random_points(vertices, timeslices, dimension)?;
 
     info!(
         "Initial triangulation: {} vertices, {} edges, {} faces",
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run the simulation
     info!("Running CDT simulation...");
     let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-    let results = algorithm.run_simulation_with_backend(triangulation);
+    let results = algorithm.run(triangulation);
 
     // Display results
     info!("Simulation completed!");

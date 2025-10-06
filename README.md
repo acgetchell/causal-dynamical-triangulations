@@ -68,7 +68,7 @@ use causal_dynamical_triangulations::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create triangulation
-    let triangulation = CdtTriangulation2D::new_with_delaunay(10, 1, 2)?;
+    let triangulation = CdtTriangulation2D::from_random_points(10, 1, 2)?;
     
     // Configure simulation
     let metropolis_config = MetropolisConfig::new(1.0, 1000, 100, 10);
@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
     
     // Run simulation
-    let results = algorithm.run_simulation_with_backend(triangulation);
+    let results = algorithm.run(triangulation);
     
     println!("Acceptance rate: {:.3}", results.acceptance_rate());
     println!("Average action: {:.3}", results.average_action());

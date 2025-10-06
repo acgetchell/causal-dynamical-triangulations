@@ -30,7 +30,7 @@ fn bench_triangulation_creation(c: &mut Criterion) {
             &vertex_count,
             |b, &vertex_count| {
                 b.iter(|| {
-                    let triangulation = CdtTriangulation2D::new_with_delaunay(
+                    let triangulation = CdtTriangulation2D::from_random_points(
                         black_box(vertex_count),
                         black_box(1),
                         black_box(2),
@@ -51,7 +51,7 @@ fn bench_edge_counting(c: &mut Criterion) {
     let triangulations: Vec<(usize, CdtTriangulation2D)> = [10, 25, 50, 100, 200]
         .iter()
         .filter_map(|&size| {
-            CdtTriangulation2D::new_with_delaunay(size, 1, 2)
+            CdtTriangulation2D::from_random_points(size, 1, 2)
                 .ok()
                 .map(|tri| (size as usize, tri))
         })
@@ -90,7 +90,7 @@ fn bench_edge_counting(c: &mut Criterion) {
 
 /// Benchmark geometry query operations
 fn bench_geometry_queries(c: &mut Criterion) {
-    let triangulation = CdtTriangulation2D::new_with_delaunay(50, 1, 2)
+    let triangulation = CdtTriangulation2D::from_random_points(50, 1, 2)
         .expect("Failed to create test triangulation");
 
     let geometry = triangulation.geometry();
@@ -246,14 +246,14 @@ fn bench_metropolis_simulation(c: &mut Criterion) {
             &steps,
             |b, &steps| {
                 b.iter(|| {
-                    let triangulation = CdtTriangulation2D::new_with_delaunay(20, 1, 2)
+                    let triangulation = CdtTriangulation2D::from_random_points(20, 1, 2)
                         .expect("Failed to create triangulation");
 
                     let config = MetropolisConfig::new(1.0, steps, 5, 5);
                     let action_config = ActionConfig::default();
                     let mut algorithm = MetropolisAlgorithm::new(config, action_config);
 
-                    let results = algorithm.run_simulation_with_backend(black_box(triangulation));
+                    let results = algorithm.run(black_box(triangulation));
                     black_box(results)
                 });
             },
@@ -269,13 +269,13 @@ fn bench_simulation_analysis(c: &mut Criterion) {
 
     // Create a sample simulation result
     let triangulation =
-        CdtTriangulation2D::new_with_delaunay(15, 1, 2).expect("Failed to create triangulation");
+        CdtTriangulation2D::from_random_points(15, 1, 2).expect("Failed to create triangulation");
 
     let config = MetropolisConfig::new(1.0, 100, 10, 5);
     let action_config = ActionConfig::default();
     let mut algorithm = MetropolisAlgorithm::new(config, action_config);
 
-    let results = algorithm.run_simulation_with_backend(triangulation);
+    let results = algorithm.run(triangulation);
 
     group.bench_function("acceptance_rate", |b| {
         b.iter(|| {
@@ -307,7 +307,7 @@ fn bench_cache_operations(c: &mut Criterion) {
 
     group.bench_function("refresh_cache", |b| {
         b.iter(|| {
-            let mut triangulation = CdtTriangulation2D::new_with_delaunay(50, 1, 2)
+            let mut triangulation = CdtTriangulation2D::from_random_points(50, 1, 2)
                 .expect("Failed to create triangulation");
             triangulation.refresh_cache();
             black_box(triangulation)
@@ -316,7 +316,7 @@ fn bench_cache_operations(c: &mut Criterion) {
 
     group.bench_function("cache_invalidation", |b| {
         b.iter(|| {
-            let mut triangulation = CdtTriangulation2D::new_with_delaunay(50, 1, 2)
+            let mut triangulation = CdtTriangulation2D::from_random_points(50, 1, 2)
                 .expect("Failed to create triangulation");
             // Invalidate cache by getting mutable reference
             let _geometry_mut = triangulation.geometry_mut();
@@ -330,13 +330,13 @@ fn bench_cache_operations(c: &mut Criterion) {
 /// Benchmark triangulation validation
 fn bench_validation(c: &mut Criterion) {
     let triangulation =
-        CdtTriangulation2D::new_with_delaunay(30, 1, 2).expect("Failed to create triangulation");
+        CdtTriangulation2D::from_random_points(30, 1, 2).expect("Failed to create triangulation");
 
     let mut group = c.benchmark_group("validation");
 
     group.bench_function("validate_cdt_properties", |b| {
         b.iter(|| {
-            let result = triangulation.validate_cdt_properties();
+            let result = triangulation.validate();
             black_box(result)
         });
     });

@@ -191,7 +191,7 @@ impl<B: TriangulationMut> CdtTriangulation<B> {
     ///
     /// # Errors
     /// Returns error if the triangulation is invalid
-    pub fn validate_cdt_properties(&self) -> CdtResult<()> {
+    pub fn validate(&self) -> CdtResult<()> {
         // Check basic validity
         if !self.geometry.is_valid() {
             return Err(crate::errors::CdtError::InvalidParameters(
@@ -223,17 +223,16 @@ impl<B: TriangulationMut> CdtTriangulation<B> {
     fn validate_topology(&self) -> CdtResult<()> {
         let euler_char = self.geometry.euler_characteristic();
 
-        // For 2D triangulations with boundary, expect χ = 1
-        // For closed 2D manifolds, expect χ = 2 (sphere topology)
-        // TODO: Implement proper topology validation based on dimension and boundary conditions
-        // Currently, we just cache the value and accept any valid triangulation
+        // For 2D planar triangulations with boundary (random points), expect χ = 1
+        // For closed 2D surfaces, expect χ = 2. Since we generate from random points,
+        // we typically get triangulations with convex hull boundary (χ = 1)
 
         if self.dimension() == 2 {
             // Planar triangulation with boundary should have χ = 1
-            // This is a placeholder check - needs refinement based on boundary detection
+            // Closed surfaces would have χ = 2
             if euler_char != 1 && euler_char != 2 {
                 return Err(crate::errors::CdtError::InvalidParameters(format!(
-                    "Invalid topology: Euler characteristic {euler_char} unexpected for 2D triangulation"
+                    "Invalid topology: Euler characteristic {euler_char} unexpected for 2D triangulation (expected 1 for boundary or 2 for closed surface)"
                 )));
             }
         }
@@ -334,13 +333,13 @@ impl<B: TriangulationMut> std::ops::DerefMut for CdtGeometryMut<'_, B> {
 
 // Factory functions for creating CdtTriangulations with different backends
 impl CdtTriangulation<crate::geometry::backends::delaunay::DelaunayBackend2D> {
-    /// Create a new CDT triangulation with Delaunay backend.
+    /// Create a new CDT triangulation with Delaunay backend from random points.
     ///
-    /// This is the recommended way to create triangulations with the new trait-based system.
+    /// This is the recommended way to create triangulations for simulations.
     ///
     /// # Errors
     /// Returns error if triangulation generation fails
-    pub fn new_with_delaunay(
+    pub fn from_random_points(
         vertices: u32,
         time_slices: u32,
         dimension: u8,
@@ -376,9 +375,9 @@ mod tests {
     use crate::geometry::traits::TriangulationQuery;
 
     #[test]
-    fn test_new_with_delaunay() {
-        let triangulation = CdtTriangulation::new_with_delaunay(10, 3, 2)
-            .expect("Failed to create triangulation with delaunay backend");
+    fn test_from_random_points() {
+        let triangulation =
+            CdtTriangulation::from_random_points(10, 3, 2).expect("Failed to create triangulation");
 
         assert_eq!(triangulation.dimension(), 2);
         assert_eq!(triangulation.time_slices(), 3);
@@ -389,14 +388,14 @@ mod tests {
 
     #[test]
     fn test_invalid_dimension() {
-        let result = CdtTriangulation::new_with_delaunay(10, 3, 3);
+        let result = CdtTriangulation::from_random_points(10, 3, 3);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_geometry_access() {
         let triangulation =
-            CdtTriangulation::new_with_delaunay(5, 2, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 2, 2).expect("Failed to create triangulation");
 
         // Test immutable access
         let geometry = triangulation.geometry();
@@ -407,7 +406,7 @@ mod tests {
     #[test]
     fn test_geometry_mut_with_cache() {
         let mut triangulation =
-            CdtTriangulation::new_with_delaunay(5, 2, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 2, 2).expect("Failed to create triangulation");
 
         // Get initial edge count (populates cache)
         let initial_edge_count = triangulation.edge_count();
@@ -431,7 +430,7 @@ mod tests {
         use crate::geometry::traits::TriangulationQuery;
 
         let triangulation =
-            CdtTriangulation::new_with_delaunay(5, 2, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 2, 2).expect("Failed to create triangulation");
 
         let euler_char = triangulation.geometry().euler_characteristic();
 

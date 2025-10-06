@@ -14,15 +14,15 @@ mod integration_tests {
     #[test]
     fn test_complete_cdt_simulation_workflow() {
         // Test full CDT simulation pipeline
-        let triangulation = CdtTriangulation::new_with_delaunay(8, 2, 2)
+        let triangulation = CdtTriangulation::from_random_points(8, 2, 2)
             .expect("Failed to create initial triangulation");
 
         let config = MetropolisConfig::new(1.0, 50, 10, 5);
         let action_config = ActionConfig::default();
         let mut algorithm = MetropolisAlgorithm::new(config, action_config);
 
-        // Run simulation with new backend
-        let results = algorithm.run_simulation_with_backend(triangulation);
+        // Run simulation
+        let results = algorithm.run(triangulation);
 
         // Verify results
         assert!(!results.steps.is_empty(), "Simulation should produce steps");
@@ -48,7 +48,7 @@ mod integration_tests {
     fn test_edge_counting_consistency() {
         // Test that edge counting is consistent
         let triangulation =
-            CdtTriangulation::new_with_delaunay(7, 3, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(7, 3, 2).expect("Failed to create triangulation");
 
         let edge_count = triangulation.edge_count();
         assert!(edge_count > 0, "Should have positive edge count");
@@ -58,30 +58,30 @@ mod integration_tests {
         let e = edge_count;
         let f = triangulation.face_count();
 
-        // For random Delaunay triangulations: V - E + F can vary depending on boundary conditions
-        // and triangulation connectivity. Typical values for planar graphs are 1-3.
+        // For random point triangulations, V - E + F can be either 1 (with boundary) or 2 (closed).
+        // This depends on the specific point configuration and triangulation connectivity.
         let euler =
             i32::try_from(v).unwrap() - i32::try_from(e).unwrap() + i32::try_from(f).unwrap();
         assert!(
-            (1..=3).contains(&euler),
-            "Euler characteristic should be in valid range [1, 3] for random Delaunay triangulations, got {euler}"
+            euler == 1 || euler == 2,
+            "Euler characteristic should be 1 (with boundary) or 2 (closed) for planar triangulation, got {euler}"
         );
     }
 
     #[test]
     fn test_topology_invariants() {
         let triangulation =
-            CdtTriangulation::new_with_delaunay(6, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(6, 1, 2).expect("Failed to create triangulation");
 
         let v = i32::try_from(triangulation.vertex_count()).unwrap_or(i32::MAX);
         let e = i32::try_from(triangulation.edge_count()).unwrap_or(i32::MAX);
         let f = i32::try_from(triangulation.face_count()).unwrap_or(i32::MAX);
 
-        // Verify Euler's formula for planar graphs: V - E + F is typically 1-3 for random Delaunay triangulations
+        // Verify Euler's formula for planar graphs: V - E + F should be 1 or 2
         let euler = v - e + f;
         assert!(
-            (1..=3).contains(&euler),
-            "Euler characteristic should be in range [1, 3] for planar Delaunay triangulations, got {euler}"
+            euler == 1 || euler == 2,
+            "Euler characteristic should be 1 (with boundary) or 2 (closed) for planar triangulation, got {euler}"
         );
 
         // Verify all counts are positive
@@ -93,7 +93,7 @@ mod integration_tests {
     #[test]
     fn test_enhanced_caching_behavior() {
         let mut triangulation =
-            CdtTriangulation::new_with_delaunay(5, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(5, 1, 2).expect("Failed to create triangulation");
 
         // Test cache population
         let initial_count = triangulation.edge_count();
@@ -115,14 +115,14 @@ mod integration_tests {
     #[test]
     fn test_error_handling_robustness() {
         // Test parameter validation with enhanced error context
-        let result = CdtTriangulation::new_with_delaunay(2, 1, 2);
+        let result = CdtTriangulation::from_random_points(2, 1, 2);
         assert!(result.is_err(), "Should reject < 3 vertices");
 
-        let result = CdtTriangulation::new_with_delaunay(5, 1, 3);
+        let result = CdtTriangulation::from_random_points(5, 1, 3);
         assert!(result.is_err(), "Should reject non-2D");
 
         // Test successful minimum case
-        let min_triangulation = CdtTriangulation::new_with_delaunay(3, 1, 2);
+        let min_triangulation = CdtTriangulation::from_random_points(3, 1, 2);
         assert!(
             min_triangulation.is_ok(),
             "Minimum valid parameters should succeed"
@@ -132,7 +132,7 @@ mod integration_tests {
     #[test]
     fn test_action_calculation_consistency() {
         let triangulation =
-            CdtTriangulation::new_with_delaunay(4, 1, 2).expect("Failed to create triangulation");
+            CdtTriangulation::from_random_points(4, 1, 2).expect("Failed to create triangulation");
 
         let config = ActionConfig::default();
         let vertices = u32::try_from(triangulation.vertex_count()).unwrap_or_default();
@@ -158,9 +158,9 @@ mod integration_tests {
     #[test]
     fn test_simulation_reproducibility() {
         // Test that simulations with same parameters produce consistent results structure
-        let triangulation1 = CdtTriangulation::new_with_delaunay(5, 1, 2)
+        let triangulation1 = CdtTriangulation::from_random_points(5, 1, 2)
             .expect("Failed to create first triangulation");
-        let triangulation2 = CdtTriangulation::new_with_delaunay(5, 1, 2)
+        let triangulation2 = CdtTriangulation::from_random_points(5, 1, 2)
             .expect("Failed to create second triangulation");
 
         let config = MetropolisConfig::new(1.0, 10, 2, 2);
@@ -169,8 +169,8 @@ mod integration_tests {
         let mut algorithm1 = MetropolisAlgorithm::new(config.clone(), action_config.clone());
         let mut algorithm2 = MetropolisAlgorithm::new(config, action_config);
 
-        let results1 = algorithm1.run_simulation_with_backend(triangulation1);
-        let results2 = algorithm2.run_simulation_with_backend(triangulation2);
+        let results1 = algorithm1.run(triangulation1);
+        let results2 = algorithm2.run(triangulation2);
 
         // Results should have same structure (though values may differ due to randomness)
         assert_eq!(
@@ -192,7 +192,7 @@ mod integration_tests {
     #[test]
     fn test_memory_efficiency() {
         // Test that large triangulations can be created and processed efficiently
-        let triangulation = CdtTriangulation::new_with_delaunay(20, 1, 2)
+        let triangulation = CdtTriangulation::from_random_points(20, 1, 2)
             .expect("Failed to create large triangulation");
 
         // Verify reasonable scaling of components
