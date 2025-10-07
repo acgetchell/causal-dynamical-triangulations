@@ -30,3 +30,7 @@ build/
 
 # Coverage reports
 *.profraw
+
+# Performance testing data
+performance_baselines/
+performance_reports/

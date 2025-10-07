@@ -30,3 +30,48 @@ pub trait TriangulationOps: TriangulationQuery {
 
 // Blanket implementation for all types that implement TriangulationQuery
 impl<T: TriangulationQuery> TriangulationOps for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::backends::mock::MockBackend;
+
+    #[test]
+    fn test_is_delaunay_delegates_to_is_valid() {
+        let backend = MockBackend::create_triangle();
+
+        // For our mock backend, is_delaunay should delegate to is_valid
+        // which returns true for a basic triangle
+        assert!(backend.is_delaunay());
+    }
+
+    #[test]
+    fn test_convex_hull_placeholder() {
+        let backend = MockBackend::create_triangle();
+
+        // Current implementation returns empty vector
+        let hull = backend.convex_hull();
+        assert!(hull.is_empty());
+    }
+
+    #[test]
+    fn test_boundary_edges_placeholder() {
+        let backend = MockBackend::create_triangle();
+
+        // Current implementation returns empty vector
+        let boundary = backend.boundary_edges();
+        assert!(boundary.is_empty());
+    }
+
+    #[test]
+    fn test_triangulation_ops_trait_available() {
+        let backend = MockBackend::create_triangle();
+
+        // Test that the blanket implementation provides the trait methods
+        let _is_delaunay = backend.is_delaunay();
+        let _hull = backend.convex_hull();
+        let _boundary = backend.boundary_edges();
+
+        // If we get here without compilation errors, the trait is working
+    }
+}

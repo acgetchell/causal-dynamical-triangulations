@@ -1,0 +1,14 @@
+# Configuration for Bencher.dev performance tracking
+# This can be used if you decide to integrate with Bencher.dev service
+
+[project]
+name = "causal-dynamical-triangulations"
+
+[adapter]
+name = "rust_criterion"
+
+[thresholds]
+# Alert if performance degrades by more than 10%
+max_deviation = 0.10
+# Minimum number of measurements before alerting
+min_sample_size = 10

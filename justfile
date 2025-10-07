@@ -107,6 +107,48 @@ coverage:
     cargo tarpaulin --exclude-files 'benches/**' --exclude-files 'examples/**' --exclude-files 'tests/**' --out Html --output-dir target/tarpaulin
     @echo "📊 Coverage report generated: target/tarpaulin/tarpaulin-report.html"
 
+# Performance analysis
+perf-baseline tag="":
+    #!/usr/bin/env bash
+    if [ -n "{{tag}}" ]; then
+        uv run performance-analysis --save-baseline --tag "{{tag}}"
+    else
+        uv run performance-analysis --save-baseline
+    fi
+
+perf-check threshold="10.0":
+    uv run performance-analysis --threshold {{threshold}}
+
+perf-report file="":
+    #!/usr/bin/env bash
+    if [ -n "{{file}}" ]; then
+        uv run performance-analysis --report "{{file}}"
+    else
+        timestamp=$(date +"%Y%m%d_%H%M%S")
+        uv run performance-analysis --report "performance_report_${timestamp}.md"
+        echo "📄 Report saved to: performance_report_${timestamp}.md"
+    fi
+
+perf-trends days="7":
+    uv run performance-analysis --trends {{days}}
+
+perf-compare file:
+    uv run performance-analysis --compare "{{file}}"
+
+perf-help:
+    @echo "Performance Analysis Commands:"
+    @echo "  just perf-baseline [tag]    # Save current performance as baseline (optionally tagged)"
+    @echo "  just perf-check [threshold] # Check for regressions (default: 10% threshold)"
+    @echo "  just perf-report [file]     # Generate performance report"
+    @echo "  just perf-trends [days]     # Analyze trends over N days (default: 7)"
+    @echo "  just perf-compare <file>    # Compare with specific baseline file"
+    @echo ""
+    @echo "Examples:"
+    @echo "  just perf-baseline v1.0.0   # Save tagged baseline"
+    @echo "  just perf-check 5.0         # Check with 5% threshold"
+    @echo "  just perf-report my_report.md # Save report to specific file"
+    @echo "  just perf-trends 30         # Analyze last 30 days"
+
 # Pre-commit workflow (recommended before pushing)
 commit-check: quality test-all
     @echo "🚀 Ready to commit! All checks passed."
@@ -114,6 +156,11 @@ commit-check: quality test-all
 # CI simulation (run what CI runs)
 ci: quality test-release bench-compile kani-fast
     @echo "🎯 CI simulation complete!"
+
+# CI with performance baseline (for main branch)
+ci-baseline tag="ci":
+    just ci
+    just perf-baseline {{tag}}
 
 # Development workflow
 dev: fmt clippy test
@@ -132,6 +179,7 @@ help-workflows:
     @echo "  just dev           # Quick development cycle (format, lint, test)"
     @echo "  just commit-check  # Full pre-commit checks"
     @echo "  just ci            # Simulate CI pipeline (requires Kani)"
+    @echo "  just ci-baseline   # CI + save performance baseline"
     @echo "  just quality       # All quality checks"
     @echo "  just test-all      # All tests"
     @echo "  just kani          # Run all Kani formal verification proofs"
@@ -139,5 +187,10 @@ help-workflows:
     @echo "  just coverage      # Generate coverage report"
     @echo "  just run-example   # Run with example arguments"
     @echo "  just run -- <args> # Run with custom arguments"
+    @echo ""
+    @echo "Performance Analysis:"
+    @echo "  just perf-help     # Show performance analysis commands"
+    @echo "  just perf-check    # Check for performance regressions"
+    @echo "  just perf-baseline # Save current performance as baseline"
     @echo ""
     @echo "Note: 'just ci' requires Kani verifier. Run 'just setup' for full environment."

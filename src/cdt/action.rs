@@ -136,6 +136,62 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn action_always_finite(
+            vertices in 0u32..100,
+            edges in 0u32..500,
+            triangles in 0u32..300,
+            coupling_0 in -10.0f64..10.0,
+            coupling_2 in -10.0f64..10.0,
+            cosmological_constant in -5.0f64..5.0
+        ) {
+            let action = compute_regge_action(
+                vertices, edges, triangles,
+                coupling_0, coupling_2, cosmological_constant
+            );
+
+            prop_assert!(action.is_finite(), "Action must always be finite, got: {}", action);
+            prop_assert!(!action.is_nan(), "Action must not be NaN");
+        }
+
+        #[test]
+        fn action_config_consistency(
+            vertices in 0u32..50,
+            edges in 0u32..150,
+            triangles in 0u32..100,
+            coupling_0 in -5.0f64..5.0,
+            coupling_2 in -5.0f64..5.0,
+            cosmological_constant in -2.0f64..2.0
+        ) {
+            let config = ActionConfig::new(coupling_0, coupling_2, cosmological_constant);
+
+            // Config should preserve values
+            prop_assert!((config.coupling_0 - coupling_0).abs() < f64::EPSILON);
+            prop_assert!((config.coupling_2 - coupling_2).abs() < f64::EPSILON);
+            prop_assert!((config.cosmological_constant - cosmological_constant).abs() < f64::EPSILON);
+
+            // Config-based calculation should match direct function call
+            let action_config = config.calculate_action(vertices, edges, triangles);
+            let action_direct = compute_regge_action(
+                vertices, edges, triangles,
+                coupling_0, coupling_2, cosmological_constant
+            );
+
+            prop_assert!(
+                (action_config - action_direct).abs() < f64::EPSILON,
+                "Config-based and direct calculations should match: {} vs {}",
+                action_config, action_direct
+            );
+        }
+    }
+}
+
 #[cfg(kani)]
 mod kani_proofs {
     //! Kani formal verification proofs for action calculations

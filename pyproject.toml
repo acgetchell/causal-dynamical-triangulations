@@ -19,10 +19,11 @@ dependencies = []
 # Explicitly define modules for setuptools
 [tool.setuptools]
 package-dir = {"" = "scripts"}
-py-modules = ["changelog_utils", "subprocess_utils", "enhance_commits"]
+py-modules = ["changelog_utils", "subprocess_utils", "enhance_commits", "performance_analysis"]
 
 [project.scripts]
 changelog-utils = "changelog_utils:main"
+performance-analysis = "performance_analysis:main"
 
 [project.urls]
 "Homepage" = "https://github.com/acgetchell/causal-dynamical-triangulations"

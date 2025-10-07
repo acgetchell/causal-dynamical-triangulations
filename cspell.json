@@ -99,6 +99,8 @@
         "rustc",
         "rustdoc",
         "rustup",
+        "SARIF",
+        "sarif",
         "semgrep",
         "serde",
         "setuptools",

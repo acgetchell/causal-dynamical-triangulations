@@ -432,8 +432,9 @@ cargo bench
 # Run specific benchmark group
 cargo bench triangulation_creation
 
-# Generate reports
-cargo bench -- --output-format html
+# HTML reports are automatically generated at target/criterion/report/index.html
+# Open the report in your browser
+open target/criterion/report/index.html
 ```
 
 ### Performance Guidelines
