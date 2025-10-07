@@ -10,7 +10,11 @@ default:
 # Development setup
 setup:
     @echo "Setting up development environment..."
-    rustup component add clippy rustfmt rust-docs rust-src
+    @echo "Note: Rust toolchain and components are managed by rust-toolchain.toml"
+    @echo "Installing Kani verifier for formal verification (required for CI simulation)..."
+    cargo install --locked kani-verifier
+    cargo kani setup
+    @echo "Building project..."
     cargo build
 
 # Code quality and formatting
@@ -124,9 +128,10 @@ clean:
 # Help with common workflows
 help-workflows:
     @echo "Common Just workflows:"
+    @echo "  just setup         # Set up development environment (includes Kani)"
     @echo "  just dev           # Quick development cycle (format, lint, test)"
     @echo "  just commit-check  # Full pre-commit checks"
-    @echo "  just ci            # Simulate CI pipeline"
+    @echo "  just ci            # Simulate CI pipeline (requires Kani)"
     @echo "  just quality       # All quality checks"
     @echo "  just test-all      # All tests"
     @echo "  just kani          # Run all Kani formal verification proofs"
@@ -134,3 +139,5 @@ help-workflows:
     @echo "  just coverage      # Generate coverage report"
     @echo "  just run-example   # Run with example arguments"
     @echo "  just run -- <args> # Run with custom arguments"
+    @echo ""
+    @echo "Note: 'just ci' requires Kani verifier. Run 'just setup' for full environment."
