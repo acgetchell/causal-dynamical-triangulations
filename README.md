@@ -143,11 +143,16 @@ cargo bench triangulation_creation
 cargo bench metropolis_simulation
 cargo bench action_calculations
 
-# Generate performance reports
-cargo bench -- --output-format html
+# Performance regression testing
+just perf-check          # Check for performance regressions
+just perf-baseline       # Save performance baseline
+just perf-report         # Generate detailed performance report
+just perf-trends 7       # Analyze performance trends over 7 days
 ```
 
-See [`benches/README.md`](benches/README.md) for detailed benchmarking documentation.
+See [`benches/README.md`](benches/README.md) for benchmark details and
+[`docs/PERFORMANCE_TESTING.md`](docs/PERFORMANCE_TESTING.md) for comprehensive
+performance testing workflow documentation.
 
 ## 🔒 Formal Verification
 

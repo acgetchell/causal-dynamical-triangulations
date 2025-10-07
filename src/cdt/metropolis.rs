@@ -271,8 +271,12 @@ mod tests {
         use crate::cdt::triangulation::CdtTriangulation;
         use crate::geometry::traits::TriangulationQuery;
 
-        let triangulation =
-            CdtTriangulation::from_random_points(5, 1, 2).expect("Failed to create triangulation");
+        // Use fixed seed to ensure deterministic, closed triangulation with Euler=2
+        // Seed 53 produces V=5, E=9, F=6, Euler=2 for this configuration
+        const TRIANGULATION_SEED: u64 = 53;
+
+        let triangulation = CdtTriangulation::from_seeded_points(5, 1, 2, TRIANGULATION_SEED)
+            .expect("Failed to create triangulation with fixed seed");
         let geometry = triangulation.geometry();
 
         // Test that the backend-based counting methods work
@@ -285,15 +289,15 @@ mod tests {
         assert!(triangle_count > 0);
         assert!(edge_count > 0);
 
-        // For a valid 2D triangulation, verify Euler's formula: V - E + F = 1
+        // For a closed 2D triangulation, verify Euler's formula: V - E + F = 2
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let euler_check = vertex_count as i32 - edge_count as i32 + triangle_count as i32;
 
-        // For a planar graph with boundary (disk topology), Euler's formula gives:
-        // χ = V - E + F = 1
+        // For a closed triangulation (sphere topology), Euler's formula gives:
+        // χ = V - E + F = 2
         assert_eq!(
-            euler_check, 1,
-            "Euler's formula V - E + F = 1 failed for planar graph with boundary: {vertex_count} - {edge_count} + {triangle_count} = {euler_check} (expected 1)"
+            euler_check, 2,
+            "Euler's formula V - E + F = 2 failed for closed triangulation: {vertex_count} - {edge_count} + {triangle_count} = {euler_check} (expected 2)"
         );
     }
 

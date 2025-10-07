@@ -16,12 +16,21 @@ pub trait TriangulationOps: TriangulationQuery {
     }
 
     /// Compute the convex hull of the triangulation
+    ///
+    /// # Note
+    /// This is currently a placeholder implementation that returns an empty vector.
+    /// TODO: Implement proper convex hull computation using algorithms like Graham scan
+    /// or Jarvis march.
     fn convex_hull(&self) -> Vec<Self::VertexHandle> {
         // TODO: Implement convex hull computation
         Vec::new()
     }
 
-    /// Find all boundary edges
+    /// Find all boundary edges of the triangulation
+    ///
+    /// # Note  
+    /// This is currently a placeholder implementation that returns an empty vector.
+    /// TODO: Implement boundary detection by finding edges that belong to only one face.
     fn boundary_edges(&self) -> Vec<Self::EdgeHandle> {
         // TODO: Implement boundary detection
         Vec::new()
@@ -46,18 +55,22 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "TODO: Remove when convex_hull is properly implemented"]
     fn test_convex_hull_placeholder() {
         let backend = MockBackend::create_triangle();
 
+        // TODO: This test validates placeholder behavior - update when implementation is complete
         // Current implementation returns empty vector
         let hull = backend.convex_hull();
         assert!(hull.is_empty());
     }
 
     #[test]
+    #[ignore = "TODO: Remove when boundary_edges is properly implemented"]
     fn test_boundary_edges_placeholder() {
         let backend = MockBackend::create_triangle();
 
+        // TODO: This test validates placeholder behavior - update when implementation is complete
         // Current implementation returns empty vector
         let boundary = backend.boundary_edges();
         assert!(boundary.is_empty());
@@ -67,11 +80,15 @@ mod tests {
     fn test_triangulation_ops_trait_available() {
         let backend = MockBackend::create_triangle();
 
-        // Test that the blanket implementation provides the trait methods
-        let _is_delaunay = backend.is_delaunay();
-        let _hull = backend.convex_hull();
-        let _boundary = backend.boundary_edges();
+        // Verify the blanket implementation provides all trait methods with expected types
+        assert!(backend.is_delaunay()); // Should delegate to is_valid() for mock backend
+        assert_eq!(backend.convex_hull().len(), 0); // Placeholder returns empty vector
+        assert_eq!(backend.boundary_edges().len(), 0); // Placeholder returns empty vector
 
-        // If we get here without compilation errors, the trait is working
+        // Verify return types are as expected
+        let hull: Vec<_> = backend.convex_hull();
+        let boundary: Vec<_> = backend.boundary_edges();
+        assert!(hull.is_empty());
+        assert!(boundary.is_empty());
     }
 }
