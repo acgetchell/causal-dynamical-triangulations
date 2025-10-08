@@ -63,8 +63,10 @@ class PerformanceAnalyzer:
             print(f"Warning: Criterion results directory not found: {self.results_dir}")
             return results
 
-        # Recursively find all estimates.json files in the criterion directory
-        for estimates_file in self.results_dir.rglob("base/estimates.json"):
+        # Recursively find all estimates.json files (Criterion writes current runs to "new")
+        for estimates_file in self.results_dir.rglob("estimates.json"):
+            if estimates_file.parent.name not in {"new", "base"}:
+                continue
             try:
                 with open(estimates_file) as f:
                     data = json.load(f)
@@ -74,7 +76,7 @@ class PerformanceAnalyzer:
                 # becomes "action_calculations/calculate_action/50"
                 path_parts = estimates_file.relative_to(self.results_dir).parts[
                     :-2
-                ]  # Remove 'base/estimates.json'
+                ]  # Remove '<run_type>/estimates.json'
                 benchmark_name = "/".join(path_parts)
 
                 results[benchmark_name] = {
