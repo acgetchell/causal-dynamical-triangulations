@@ -32,10 +32,10 @@ class CoverageEntry:
     path: Path
 
     def format(self, relative_to: Optional[Path] = None) -> str:
-        display_path = self._relative_path(relative_to)
+        display_path = self.relative_path(relative_to)
         return f"{self.coverage:6.2f}%  {display_path}"
 
-    def _relative_path(self, relative_to: Optional[Path]) -> Path:
+    def relative_path(self, relative_to: Optional[Path]) -> Path:
         if relative_to is None:
             return self.path
         try:
@@ -111,7 +111,7 @@ def filter_entries(
     normalized_prefix = prefix if prefix.endswith("/") else f"{prefix}/"
     filtered: List[CoverageEntry] = []
     for entry in entries:
-        relative = entry._relative_path(relative_to)
+        relative = entry.relative_path(relative_to)
         relative_str = relative.as_posix()
         if relative_str.startswith(normalized_prefix):
             filtered.append(entry)

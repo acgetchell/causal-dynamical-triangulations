@@ -10,7 +10,7 @@
 use crate::cdt::action::ActionConfig;
 use crate::cdt::metropolis::MetropolisConfig;
 use clap::Parser;
-use std::env;
+use dirs::home_dir;
 use std::path::{Component, Path, PathBuf};
 
 /// Main configuration structure for CDT simulations.
@@ -179,16 +179,22 @@ impl CdtConfig {
             return normalize_components(candidate);
         }
 
-        if let Some(candidate_str) = candidate.to_str() {
-            if let Some(stripped) = candidate_str.strip_prefix("~/") {
-                if let Ok(home) = env::var("HOME") {
-                    let path = PathBuf::from(home).join(stripped);
-                    return normalize_components(&path);
+        if let Some(candidate_str) = candidate.to_str()
+            && let Some(rest) = candidate_str.strip_prefix('~')
+        {
+            if rest.is_empty() {
+                if let Some(home) = home_dir() {
+                    return normalize_components(&home);
                 }
-            } else if candidate_str == "~"
-                && let Ok(home) = env::var("HOME")
+            } else if matches!(rest.chars().next(), Some('/' | '\\'))
+                && let Some(home) = home_dir()
             {
-                let path = PathBuf::from(home);
+                let stripped = rest.trim_start_matches(['/', '\\']);
+                let path = if stripped.is_empty() {
+                    home
+                } else {
+                    home.join(stripped)
+                };
                 return normalize_components(&path);
             }
         }
@@ -393,7 +399,7 @@ impl TestConfig {
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
-    use std::env;
+    use dirs::home_dir;
     use std::path::PathBuf;
 
     #[test]
@@ -551,9 +557,9 @@ mod tests {
 
     #[test]
     fn test_resolve_path_with_home_expansion() {
-        let home = env::var("HOME").expect("HOME environment variable must be set for this test");
+        let home = home_dir().expect("Home directory must be resolvable for this test");
         let resolved = CdtConfig::resolve_path("/tmp", PathBuf::from("~/config.toml"));
-        assert_eq!(resolved, PathBuf::from(home).join("config.toml"));
+        assert_eq!(resolved, home.join("config.toml"));
     }
 
     #[test]

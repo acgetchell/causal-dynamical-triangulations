@@ -174,9 +174,9 @@ shell-lint:
     @# Note: justfiles are not shell scripts and are excluded from shellcheck
 
 spell-check:
-    files="$(git status --porcelain | awk '{print $2}')"; \
-    if [ -n "$files" ]; then \
-        npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json $files; \
+    git diff --name-only -z HEAD | \
+    if IFS= read -r -d $'\0' file; then \
+        git diff --name-only -z HEAD | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json; \
     else \
         echo "No modified files to spell-check."; \
     fi

@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 # Can be imported when needed: from changelog_utils import ChangelogUtils
 
 # Precompiled regex patterns for performance
-COMMIT_BULLET_RE = re.compile(r"^\s*[-*]\s*\*\*")
+COMMIT_BULLET_RE = re.compile(r"^\s*[-*]\s+")
 TITLE_FALLBACK_RE = re.compile(
     r"^\s*-\s+([^[(]+?)(?:\s+\(#\d+\))?\s*(?:\[`[a-f0-9]{7,40}`\].*)?$",
     re.IGNORECASE,
