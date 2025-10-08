@@ -429,7 +429,12 @@ class PerformanceAnalyzer:
                 sum_xy = sum(i * v for i, v in enumerate(values))
                 sum_xx = sum(i * i for i in range(n))
 
-                slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)
+                denominator = n * sum_xx - sum_x * sum_x
+                if denominator == 0:
+                    # All data points at same position - treat as stable
+                    slope = 0
+                else:
+                    slope = (n * sum_xy - sum_x * sum_y) / denominator
 
                 trends[benchmark] = {
                     "slope": slope,
@@ -502,7 +507,17 @@ Examples:
 
     args = parser.parse_args()
 
-    project_root = Path(__file__).parent.parent
+    current = Path(__file__).resolve().parent
+    project_root: Optional[Path] = None
+
+    while current != current.parent:
+        if (current / "Cargo.toml").exists() or (current / ".git").exists():
+            project_root = current
+            break
+        current = current.parent
+
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent
     analyzer = PerformanceAnalyzer(project_root)
 
     # Handle trend analysis

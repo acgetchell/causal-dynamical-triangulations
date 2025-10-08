@@ -10,7 +10,7 @@
   "includeBranch": ["main", "master"],
   "replaceText": {
     "feat": "✨ Features",
-    "fix": "🐛 Bug Fixes", 
+    "fix": "🐛 Fix",
     "perf": "⚡ Performance",
     "refactor": "♻️ Refactoring",
     "docs": "📚 Documentation",
