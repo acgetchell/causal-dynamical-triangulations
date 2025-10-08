@@ -174,12 +174,17 @@ shell-lint:
     @# Note: justfiles are not shell scripts and are excluded from shellcheck
 
 spell-check:
-    git diff --name-only -z HEAD | \
-    if IFS= read -r -d $'\0' file; then \
-        git diff --name-only -z HEAD | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json; \
-    else \
-        echo "No modified files to spell-check."; \
-    fi
+	#!/usr/bin/env bash
+	set -euo pipefail
+	files=()
+	while IFS= read -r -d '' file; do
+		files+=("$file")
+	done < <(git diff --name-only -z HEAD)
+	if [ "${#files[@]}" -gt 0 ]; then
+		printf '%s\0' "${files[@]}" | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json
+	else
+		echo "No modified files to spell-check."
+	fi
 
 test:
     cargo test --verbose
@@ -197,4 +202,4 @@ validate-json:
     git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
 
 validate-toml:
-    git ls-files -z '*.toml' | xargs -0 -r -I {} sh -c 'cd scripts && uv run python -c "import tomllib; tomllib.load(open(\"../{}\", \"rb\")); print(\"{} is valid TOML\")"'
+    git ls-files -z '*.toml' | xargs -0 -r -I {} sh -c 'uv run python -c "import tomllib; tomllib.load(open(\"{}\", \"rb\")); print(\"{} is valid TOML\")"'

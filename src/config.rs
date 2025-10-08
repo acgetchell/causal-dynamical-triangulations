@@ -331,6 +331,15 @@ impl CdtConfig {
             return Err("Thermalization steps cannot exceed total steps".to_string());
         }
 
+        let measurement_steps = self.steps.saturating_sub(self.thermalization_steps);
+        if measurement_steps > 0 && measurement_steps < self.measurement_frequency {
+            return Err(format!(
+                "Only {measurement_steps} steps remain after thermalization, but measurement_frequency is {}. \
+                 No measurements will be taken. Increase steps or decrease measurement_frequency.",
+                self.measurement_frequency
+            ));
+        }
+
         Ok(())
     }
 }

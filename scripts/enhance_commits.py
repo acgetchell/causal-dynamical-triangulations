@@ -7,7 +7,9 @@ Keep a Changelog format (Added/Changed/Fixed/Removed/Deprecated/Security).
 
 import re
 import sys
+from collections.abc import Mapping, MutableSequence, Sequence
 from pathlib import Path
+from re import Pattern
 
 # Add the script directory to Python path for shared utilities
 SCRIPT_DIR = Path(__file__).parent
@@ -25,7 +27,7 @@ TITLE_FALLBACK_RE = re.compile(
 
 
 # Category patterns for Keep a Changelog classification
-CATEGORY_PATTERNS = {
+_CATEGORY_PATTERN_STRINGS = {
     "added": [
         r"\badd\b(?!itional)",  # 'add' but not 'additional'
         r"\badds\b",
@@ -171,9 +173,13 @@ CATEGORY_PATTERNS = {
         r"\bdependabot\b",
     ],
 }
+CATEGORY_PATTERNS = {
+    category: [re.compile(pattern) for pattern in patterns]
+    for category, patterns in _CATEGORY_PATTERN_STRINGS.items()
+}
 
 
-def _extract_title_text(entry):
+def _extract_title_text(entry: str) -> str:
     """Extract commit title from entry for pattern matching."""
     if not entry or not entry.strip():
         return ""
@@ -188,7 +194,10 @@ def _extract_title_text(entry):
     return match.group(1).lower().strip() if match else ""
 
 
-def _categorize_entry(title_text, patterns):
+def _categorize_entry(
+    title_text: str,
+    patterns: Mapping[str, Sequence[Pattern[str]]],
+) -> str:
     """Categorize entry based on title text and patterns."""
     return next(
         (
@@ -201,13 +210,18 @@ def _categorize_entry(title_text, patterns):
                 "deprecated",
                 "security",
             ]
-            if any(re.search(pattern, title_text) for pattern in patterns.get(category, []))
+            if any(pattern.search(title_text) for pattern in patterns.get(category, []))
         ),
         "changed",
     )
 
 
-def _add_section_with_entries(output_lines, section_name, entries, any_sections_output):
+def _add_section_with_entries(
+    output_lines: MutableSequence[str],
+    section_name: str,
+    entries: Sequence[str],
+    any_sections_output: bool,
+) -> bool:
     """Add a section with entries to output lines."""
     if not entries:
         return any_sections_output
@@ -269,7 +283,7 @@ def process_and_output_categorized_entries(entries, output_lines):
         )
 
 
-def _process_section_header(line):
+def _process_section_header(line: str) -> tuple[str, bool, bool, bool] | None:
     """Process section headers and return section flags."""
     section_patterns = {
         r"^### *(Changes|Changed)$": ("changes", True, False, False),
@@ -288,7 +302,7 @@ def _process_section_header(line):
     return None
 
 
-def _collect_commit_entry(lines, line_index):
+def _collect_commit_entry(lines: Sequence[str], line_index: int) -> tuple[str, int]:
     """Collect a commit entry with its body content."""
     current_entry = [lines[line_index]]
 
@@ -304,7 +318,7 @@ def _collect_commit_entry(lines, line_index):
     return "\n".join(current_entry), next_line_index
 
 
-def _process_changelog_lines(lines):
+def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
     """Process changelog lines and return categorized output."""
     output_lines = []
     section_state = {
@@ -351,6 +365,9 @@ def _process_changelog_lines(lines):
                     "in_merged_prs_section": False,
                 },
             )
+            output_lines.append(line)
+            line_index += 1
+            continue
 
         # Process commit lines in Changes or Fixed Issues sections FIRST
         if (section_state["in_changes_section"] or section_state["in_fixed_issues"]) and COMMIT_BULLET_RE.match(line):
@@ -403,7 +420,7 @@ def _process_changelog_lines(lines):
     return output_lines
 
 
-def main():
+def main() -> None:
     """Main function to process changelog entries."""
     if len(sys.argv) != 3:
         print(f"Usage: {Path(sys.argv[0]).name} <input_changelog> <output_changelog>", file=sys.stderr)
@@ -412,19 +429,27 @@ def main():
     input_file = sys.argv[1]
     output_file = sys.argv[2]
 
-    # Read the input file
-    input_path = Path(input_file)
-    with input_path.open(encoding="utf-8") as file:
-        lines = file.readlines()
+    try:
+        # Read the input file
+        input_path = Path(input_file)
+        if not input_path.exists():
+            print(f"Error: Input file '{input_file}' not found", file=sys.stderr)
+            sys.exit(1)
 
-    # Process the changelog
-    output_lines = _process_changelog_lines(lines)
+        with input_path.open(encoding="utf-8") as file:
+            lines = file.readlines()
 
-    # Write the output file
-    output_path = Path(output_file)
-    with output_path.open("w", encoding="utf-8") as file:
-        for line in output_lines:
-            file.write(line + "\n")
+        # Process the changelog
+        output_lines = _process_changelog_lines(lines)
+
+        # Write the output file
+        output_path = Path(output_file)
+        with output_path.open("w", encoding="utf-8") as file:
+            for line in output_lines:
+                file.write(line + "\n")
+    except OSError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

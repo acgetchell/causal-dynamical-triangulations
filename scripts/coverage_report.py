@@ -45,6 +45,13 @@ class CoverageEntry:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line options for summarizing Tarpaulin coverage data.
+
+    Returns:
+        argparse.Namespace: Parsed arguments including report path, prefix filter,
+            result limit, and sort order flag.
+    """
     parser = argparse.ArgumentParser(
         description="Summarize Tarpaulin JSON coverage report."
     )
@@ -77,6 +84,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_report(report_path: Path) -> dict:
+    """
+    Load and parse the Tarpaulin coverage report from disk.
+
+    Args:
+        report_path (Path): Path to the Tarpaulin JSON coverage report.
+
+    Returns:
+        dict: Parsed JSON payload describing coverage information.
+
+    Raises:
+        SystemExit: If the report file does not exist.
+    """
     if not report_path.is_file():
         raise SystemExit(f"Coverage report not found: {report_path}")
     with report_path.open("r", encoding="utf-8") as handle:
@@ -84,6 +103,15 @@ def load_report(report_path: Path) -> dict:
 
 
 def coverage_entries(data: dict) -> Iterable[CoverageEntry]:
+    """
+    Iterate over coverage entries extracted from Tarpaulin JSON data.
+
+    Args:
+        data (dict): Parsed JSON representation of the Tarpaulin report.
+
+    Yields:
+        CoverageEntry: Coverage details for each file with coverable lines.
+    """
     files = data.get("files", [])
     for entry in files:
         coverable = entry.get("coverable", 0)
@@ -106,6 +134,17 @@ def filter_entries(
     prefix: str,
     relative_to: Path,
 ) -> List[CoverageEntry]:
+    """
+    Reduce coverage entries to those matching a path prefix relative to the repo root.
+
+    Args:
+        entries (Iterable[CoverageEntry]): Coverage entries to filter.
+        prefix (str): Path prefix to match against each entry.
+        relative_to (Path): Base directory used to compute relative paths.
+
+    Returns:
+        List[CoverageEntry]: Entries whose relative paths start with the specified prefix.
+    """
     if not prefix:
         return list(entries)
     normalized_prefix = prefix if prefix.endswith("/") else f"{prefix}/"
@@ -119,6 +158,12 @@ def filter_entries(
 
 
 def main() -> None:
+    """
+    Execute the coverage reporting workflow based on CLI arguments.
+
+    This function parses CLI arguments, loads coverage data, filters results,
+    and prints formatted output.
+    """
     args = parse_args()
     data = load_report(args.report)
 
