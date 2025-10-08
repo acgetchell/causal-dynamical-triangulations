@@ -80,6 +80,7 @@ help-workflows:
     @echo "  just perf-baseline # Save current performance as baseline"
     @echo ""
     @echo "Note: 'just ci' requires Kani verifier. Run 'just setup' for full environment."
+    @echo "Note: Some recipes require external tools (uv, actionlint, jq, etc.). See 'just setup' output."
 
 kani:
     cargo kani
@@ -94,6 +95,7 @@ markdown-lint:
 
 perf-baseline tag="":
     #!/usr/bin/env bash
+    set -euo pipefail
     tag_value="{{tag}}"
     if [ -n "$tag_value" ]; then
         uv run performance-analysis --save-baseline --tag "$tag_value"
@@ -123,6 +125,7 @@ perf-help:
 
 perf-report file="":
     #!/usr/bin/env bash
+    set -euo pipefail
     file_value="{{file}}"
     if [ -n "$file_value" ]; then
         uv run performance-analysis --report "$file_value"
@@ -150,6 +153,15 @@ run-release *args:
 setup:
     @echo "Setting up development environment..."
     @echo "Note: Rust toolchain and components are managed by rust-toolchain.toml"
+    @echo ""
+    @echo "Additional tools required (install separately):"
+    @echo "  - uv: https://github.com/astral-sh/uv"
+    @echo "  - actionlint: https://github.com/rhysd/actionlint"
+    @echo "  - shfmt, shellcheck: via package manager"
+    @echo "  - jq: via package manager"
+    @echo "  - Node.js (for npx/cspell): https://nodejs.org"
+    @echo "  - cargo-tarpaulin: cargo install cargo-tarpaulin"
+    @echo ""
     @echo "Installing Kani verifier for formal verification (required for CI simulation)..."
     cargo install --locked kani-verifier
     cargo kani setup

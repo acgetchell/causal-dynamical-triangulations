@@ -45,7 +45,7 @@ jobs:
           # Check if tools are already installed (from cache)
           if ! command -v clippy-sarif &> /dev/null || ! command -v sarif-fmt &> /dev/null; then
             echo "Installing clippy-sarif and sarif-fmt..."
-            cargo install clippy-sarif sarif-fmt
+            cargo install --locked clippy-sarif sarif-fmt
           else
             echo "clippy-sarif tools already installed"
           fi

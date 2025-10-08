@@ -93,7 +93,10 @@ def coverage_entries(data: dict) -> Iterable[CoverageEntry]:
         raw_path = entry.get("path")
         if not raw_path:
             continue
-        path = Path(*raw_path)
+        if isinstance(raw_path, (list, tuple)):
+            path = Path(*raw_path)
+        else:
+            path = Path(raw_path)
         coverage = (covered / coverable) * 100
         yield CoverageEntry(coverage=coverage, coverable=coverable, covered=covered, path=path)
 

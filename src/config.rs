@@ -61,8 +61,8 @@ pub struct CdtConfig {
     #[arg(long, default_value = "0.1")]
     pub cosmological_constant: f64,
 
-    /// Run full CDT simulation (default: false, just generate triangulation)
-    #[arg(long, default_value = "false")]
+    /// Run full CDT simulation (default: true; disable to only generate triangulation)
+    #[arg(long, default_value_t = true)]
     pub simulate: bool,
 }
 
@@ -205,10 +205,16 @@ fn normalize_components(path: &Path) -> PathBuf {
         match component {
             Component::CurDir => {}
             Component::ParentDir => {
-                if normalized.as_os_str().is_empty() {
-                    continue;
+                // Don't pop if the path is empty or we're at the root
+                let mut components = normalized.components();
+                let at_root = components.next().is_some_and(|first| {
+                    components.next().is_none()
+                        && matches!(first, Component::RootDir | Component::Prefix(_))
+                });
+
+                if !normalized.as_os_str().is_empty() && !at_root {
+                    normalized.pop();
                 }
-                normalized.pop();
             }
             Component::RootDir | Component::Prefix(_) => {
                 normalized.push(component.as_os_str());
@@ -313,6 +319,10 @@ impl CdtConfig {
 
         if self.measurement_frequency > self.steps {
             return Err("Measurement frequency cannot be greater than total steps".to_string());
+        }
+
+        if self.thermalization_steps > self.steps {
+            return Err("Thermalization steps cannot exceed total steps".to_string());
         }
 
         Ok(())
@@ -552,5 +562,12 @@ mod tests {
         let candidate = PathBuf::from("configs/../settings.toml");
         let resolved = CdtConfig::resolve_path(&base, candidate);
         assert_eq!(resolved, PathBuf::from("/tmp/base/settings.toml"));
+    }
+
+    #[test]
+    fn test_resolve_path_cannot_escape_root() {
+        let candidate = PathBuf::from("/../etc/passwd");
+        let resolved = CdtConfig::resolve_path("/tmp", candidate);
+        assert_eq!(resolved, PathBuf::from("/etc/passwd"));
     }
 }
