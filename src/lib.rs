@@ -18,13 +18,14 @@
 //!
 //! ```rust,no_run
 //! // Example would require command line arguments, so we skip execution
-//! use causal_dynamical_triangulations::{Config, run_with_backend};
-//! // Config::build() requires CLI arguments, so this is marked no_run
+//! use causal_dynamical_triangulations::{CdtConfig, run_simulation};
+//! // CdtConfig requires configuration, so this is marked no_run
 //! ```
 
-use clap::Parser;
-
 // Module declarations (avoiding mod.rs files)
+/// Configuration management for CDT simulations.
+pub mod config;
+
 /// Error types for the CDT library.
 pub mod errors;
 
@@ -51,6 +52,16 @@ pub mod geometry {
         /// Mock backend for testing.
         pub mod mock;
     }
+
+    // Type aliases for common backend combinations
+    /// 2D Delaunay backend with f64 coordinates (most common configuration)
+    pub type DelaunayBackend2D = backends::delaunay::DelaunayBackend<f64, i32, i32, 2>;
+
+    /// Default backend type for 2D CDT simulations
+    pub type DefaultBackend = DelaunayBackend2D;
+
+    /// Convenient alias for CDT triangulations using the default backend
+    pub type CdtTriangulation2D = crate::cdt::triangulation::CdtTriangulation<DefaultBackend>;
 }
 
 /// Causal Dynamical Triangulations implementation modules.
@@ -66,92 +77,19 @@ pub mod cdt {
 }
 
 // Re-exports for convenience
-pub use cdt::action::{ActionConfig, calculate_regge_action_2d};
+pub use cdt::action::{ActionConfig, compute_regge_action};
 pub use cdt::ergodic_moves::{ErgodicsSystem, MoveResult, MoveType};
 pub use cdt::metropolis::{MetropolisAlgorithm, MetropolisConfig, SimulationResultsBackend};
+pub use config::{CdtConfig, TestConfig};
 pub use errors::{CdtError, CdtResult};
 
 // Trait-based triangulation (recommended)
 pub use cdt::triangulation::CdtTriangulation;
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-/// Configuration options for the `cdt-rs` crate.
-pub struct Config {
-    /// Dimensionality of the triangulation
-    #[arg(short, long, value_parser = clap::value_parser!(u8).range(2..4))]
-    dimension: Option<u8>,
-
-    /// Number of vertices
-    #[arg(short, long, value_parser = clap::value_parser!(u32).range(3..))]
-    vertices: u32,
-
-    /// Number of timeslices
-    #[arg(short, long, value_parser = clap::value_parser!(u32).range(1..))]
-    timeslices: u32,
-
-    /// Temperature for Metropolis algorithm
-    #[arg(long, default_value = "1.0")]
-    temperature: f64,
-
-    /// Number of Monte Carlo steps
-    #[arg(long, default_value = "1000")]
-    steps: u32,
-
-    /// Number of thermalization steps
-    #[arg(long, default_value = "100")]
-    thermalization_steps: u32,
-
-    /// Measurement frequency (take measurement every N steps)
-    #[arg(long, default_value = "10")]
-    measurement_frequency: u32,
-
-    /// Coupling constant κ₀ for vertices
-    #[arg(long, default_value = "1.0")]
-    coupling_0: f64,
-
-    /// Coupling constant κ₂ for triangles
-    #[arg(long, default_value = "1.0")]
-    coupling_2: f64,
-
-    /// Cosmological constant λ
-    #[arg(long, default_value = "0.1")]
-    cosmological_constant: f64,
-
-    /// Run full CDT simulation (default: false, just generate triangulation)
-    #[arg(long, default_value = "false")]
-    simulate: bool,
-}
-
-impl Config {
-    /// Builds a new instance of `Config`.
-    #[must_use]
-    pub fn build() -> Self {
-        Self::parse()
-    }
-
-    /// Creates a `MetropolisConfig` from this Config.
-    #[must_use]
-    pub const fn to_metropolis_config(&self) -> MetropolisConfig {
-        MetropolisConfig::new(
-            self.temperature,
-            self.steps,
-            self.thermalization_steps,
-            self.measurement_frequency,
-        )
-    }
-
-    /// Creates an `ActionConfig` from this Config.
-    #[must_use]
-    pub const fn to_action_config(&self) -> ActionConfig {
-        ActionConfig::new(self.coupling_0, self.coupling_2, self.cosmological_constant)
-    }
-}
-
-/// Runs the triangulation with the new trait-based backend system (RECOMMENDED).
+/// Runs a CDT simulation with the specified configuration.
 ///
 /// This function uses the trait-based geometry backend system, which provides
-/// better abstraction and testability compared to the legacy Tds-based approach.
+/// better abstraction and testability compared to legacy approaches.
 ///
 /// # Arguments
 ///
@@ -159,13 +97,20 @@ impl Config {
 ///
 /// # Returns
 ///
-/// A `SimulationResultsBackend` struct containing the results using the new backend.
+/// A `SimulationResults` struct containing the results of the simulation.
 ///
 /// # Errors
 ///
+/// Returns [`CdtError::InvalidParameters`] if the configuration fails validation
+/// (e.g., invalid measurement frequency, inconsistent parameters).
 /// Returns [`CdtError::UnsupportedDimension`] if an unsupported dimension (not 2D) is specified.
 /// Returns triangulation generation errors from the underlying triangulation creation.
-pub fn run_with_backend(config: &Config) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
+pub fn run_simulation(config: &CdtConfig) -> CdtResult<cdt::metropolis::SimulationResultsBackend> {
+    // Validate configuration early to fail fast with clear error messages
+    if let Err(err) = config.validate() {
+        return Err(CdtError::InvalidParameters(err));
+    }
+
     let vertices = config.vertices;
     let timeslices = config.timeslices;
 
@@ -178,10 +123,10 @@ pub fn run_with_backend(config: &Config) -> CdtResult<cdt::metropolis::Simulatio
     log::info!("Dimensionality: {}", config.dimension.unwrap_or(2));
     log::info!("Number of vertices: {vertices}");
     log::info!("Number of timeslices: {timeslices}");
-    log::info!("Using new trait-based backend system");
+    log::info!("Using trait-based backend system");
 
-    // Create initial triangulation with new backend
-    let triangulation = CdtTriangulation::new_with_delaunay(vertices, timeslices, 2)?;
+    // Create initial triangulation
+    let triangulation = CdtTriangulation::from_random_points(vertices, timeslices, 2)?;
 
     log::info!(
         "Triangulation created with {} vertices, {} edges, {} faces",
@@ -196,7 +141,7 @@ pub fn run_with_backend(config: &Config) -> CdtResult<cdt::metropolis::Simulatio
         let action_config = config.to_action_config();
 
         let mut algorithm = MetropolisAlgorithm::new(metropolis_config, action_config);
-        let results = algorithm.run_simulation_with_backend(triangulation);
+        let results = algorithm.run(triangulation);
 
         log::info!("Simulation Results:");
         log::info!(
@@ -239,8 +184,8 @@ mod lib_tests {
     use super::*;
     use approx::assert_relative_eq;
 
-    fn create_test_config() -> Config {
-        Config {
+    fn create_test_config() -> CdtConfig {
+        CdtConfig {
             dimension: Some(2),
             vertices: 32,
             timeslices: 3,
@@ -256,10 +201,10 @@ mod lib_tests {
     }
 
     #[test]
-    fn test_run_with_backend() {
+    fn test_run_simulation() {
         let config = create_test_config();
         assert!(config.dimension.is_some());
-        let results = run_with_backend(&config).expect("Failed to run triangulation");
+        let results = run_simulation(&config).expect("Failed to run triangulation");
         assert!(results.triangulation.face_count() > 0);
         assert!(!results.measurements.is_empty());
     }
@@ -267,9 +212,85 @@ mod lib_tests {
     #[test]
     fn triangulation_contains_triangles() {
         let config = create_test_config();
-        let results = run_with_backend(&config).expect("Failed to run triangulation");
+        let results = run_simulation(&config).expect("Failed to run triangulation");
         // Check that we have some triangles
         assert!(results.triangulation.face_count() > 0);
+    }
+
+    #[test]
+    fn test_config_validation_invalid_measurement_frequency() {
+        let mut config = create_test_config();
+        config.measurement_frequency = 0;
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject zero measurement frequency");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("Measurement frequency must be positive"),
+                "Error message should mention measurement frequency: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_measurement_frequency_too_large() {
+        let mut config = create_test_config();
+        config.steps = 100;
+        config.measurement_frequency = 200; // Greater than steps
+
+        let result = run_simulation(&config);
+        assert!(
+            result.is_err(),
+            "Should reject measurement frequency greater than steps"
+        );
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("cannot be greater than total steps"),
+                "Error message should mention steps constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_invalid_vertices() {
+        let mut config = create_test_config();
+        config.vertices = 2; // Less than minimum of 3
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject too few vertices");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("vertices must be at least 3"),
+                "Error message should mention vertex constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
+    }
+
+    #[test]
+    fn test_config_validation_negative_temperature() {
+        let mut config = create_test_config();
+        config.temperature = -1.0;
+
+        let result = run_simulation(&config);
+        assert!(result.is_err(), "Should reject negative temperature");
+
+        if let Err(CdtError::InvalidParameters(msg)) = result {
+            assert!(
+                msg.contains("Temperature must be positive"),
+                "Error message should mention temperature constraint: {msg}"
+            );
+        } else {
+            panic!("Expected InvalidParameters error");
+        }
     }
 
     #[test]

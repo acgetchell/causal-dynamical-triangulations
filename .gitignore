@@ -30,3 +30,22 @@ build/
 
 # Coverage reports
 *.profraw
+tarpaulin-report.*
+cobertura.xml
+lcov.info
+
+# Performance testing data
+performance_baselines/
+performance_reports/
+
+# Temporary development files
+*_finder.rs
+temp_*.rs
+scratch_*.rs
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*.tmp
+*~

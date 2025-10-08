@@ -231,6 +231,9 @@ impl TriangulationMut for MockBackend {
         edge: Self::EdgeHandle,
     ) -> Result<FlipResult<Self::VertexHandle, Self::EdgeHandle, Self::FaceHandle>, Self::Error>
     {
+        if !self.edges.contains_key(&edge.0) {
+            return Err(MockError::Edge(edge.0));
+        }
         // Simplified implementation
         Ok(FlipResult::new(edge, Vec::new()))
     }
@@ -247,6 +250,9 @@ impl TriangulationMut for MockBackend {
         SubdivisionResult<Self::VertexHandle, Self::EdgeHandle, Self::FaceHandle>,
         Self::Error,
     > {
+        if !self.faces.contains_key(&face.0) {
+            return Err(MockError::Face(face.0));
+        }
         // Simplified implementation
         let new_vertex = self.insert_vertex(point)?;
         Ok(SubdivisionResult::new(new_vertex, Vec::new(), face))

@@ -462,71 +462,6 @@ where
 /// Type alias for common 2D Delaunay backend
 pub type DelaunayBackend2D = DelaunayBackend<f64, i32, i32, 2>;
 
-/// Generates a random Delaunay triangulation with enhanced error context.
-///
-/// # Errors
-///
-/// Returns enhanced error information including vertex count, coordinate range, and underlying error.
-pub fn try_generate_random_delaunay2_with_context(
-    number_of_vertices: u32,
-    coordinate_range: (f64, f64),
-) -> crate::errors::CdtResult<delaunay::core::Tds<f64, i32, i32, 2>> {
-    use crate::errors::CdtError;
-
-    // Validate parameters before attempting generation
-    if number_of_vertices < 3 {
-        return Err(CdtError::InvalidGenerationParameters {
-            issue: "Insufficient vertex count".to_string(),
-            provided_value: number_of_vertices.to_string(),
-            expected_range: "≥ 3".to_string(),
-        });
-    }
-
-    if coordinate_range.0 >= coordinate_range.1 {
-        return Err(CdtError::InvalidGenerationParameters {
-            issue: "Invalid coordinate range".to_string(),
-            provided_value: format!("[{}, {}]", coordinate_range.0, coordinate_range.1),
-            expected_range: "min < max".to_string(),
-        });
-    }
-
-    // Attempt generation with detailed error context
-    delaunay::geometry::util::generate_random_triangulation(
-        number_of_vertices as usize,
-        coordinate_range,
-        None,
-        None,
-    )
-    .map_err(|e| CdtError::DelaunayGenerationFailed {
-        vertex_count: number_of_vertices,
-        coordinate_range,
-        attempt: 1,
-        underlying_error: e.to_string(),
-    })
-}
-
-/// Generates a random Delaunay triangulation with the specified number of vertices.
-///
-/// This function creates a proper Delaunay triangulation using the delaunay crate's
-/// utility functions.
-///
-/// # Panics
-///
-/// This function panics if the random triangulation generation fails, which can happen
-/// if the number of vertices is invalid (< 3) or if the coordinate generation fails.
-#[must_use]
-pub fn generate_random_delaunay2(
-    number_of_vertices: u32,
-    coordinate_range: (f64, f64),
-) -> delaunay::core::Tds<f64, i32, i32, 2> {
-    try_generate_random_delaunay2_with_context(number_of_vertices, coordinate_range)
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to generate random Delaunay triangulation with {number_of_vertices} vertices"
-            )
-        })
-}
-
 /// Counts edges in any Tds structure using a consistent algorithm.
 /// This is the canonical edge counting implementation used throughout the codebase.
 #[must_use]
@@ -572,13 +507,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::generate_random_delaunay2;
     use super::*;
 
     #[test]
     fn test_is_delaunay_on_valid_triangulation() {
         // Create a simple valid Delaunay triangulation using the existing utility
-        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         // Test the specialized is_delaunay method
@@ -591,7 +525,7 @@ mod tests {
     #[test]
     fn test_is_delaunay_via_trait() {
         // Create a simple valid Delaunay triangulation
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         // Test is_delaunay through the TriangulationOps trait
@@ -604,7 +538,7 @@ mod tests {
     #[test]
     fn test_is_delaunay_with_multiple_points() {
         // Create a triangulation with more points
-        let tds = generate_random_delaunay2(10, (0.0, 100.0));
+        let tds = crate::util::generate_random_delaunay2(10, (0.0, 100.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         assert!(
@@ -616,7 +550,7 @@ mod tests {
     #[test]
     fn test_is_delaunay_with_many_points() {
         // Create a larger triangulation
-        let tds = generate_random_delaunay2(20, (0.0, 50.0));
+        let tds = crate::util::generate_random_delaunay2(20, (0.0, 50.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         assert!(
@@ -628,7 +562,7 @@ mod tests {
     #[test]
     fn test_is_valid_basic() {
         // Test the basic is_valid implementation
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         assert!(
@@ -642,7 +576,7 @@ mod tests {
     #[test]
     fn test_is_delaunay_consistency() {
         // Test that is_delaunay and is_valid are consistent for valid triangulations
-        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let is_valid = backend.is_valid();
@@ -658,7 +592,7 @@ mod tests {
     #[test]
     fn test_is_delaunay_minimal_triangulation() {
         // Test with minimal triangulation (3 vertices)
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         assert!(backend.is_valid(), "Minimal triangulation should be valid");
@@ -678,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_vertices_iterator() {
-        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let vertices: Vec<_> = backend.vertices().collect();
@@ -702,7 +636,7 @@ mod tests {
 
     #[test]
     fn test_edges_iterator() {
-        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let edges: Vec<_> = backend.edges().collect();
@@ -723,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_faces_iterator() {
-        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let faces: Vec<_> = backend.faces().collect();
@@ -746,7 +680,7 @@ mod tests {
 
     #[test]
     fn test_vertex_coordinates() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let vertices: Vec<_> = backend.vertices().collect();
@@ -766,7 +700,7 @@ mod tests {
 
     #[test]
     fn test_vertex_coordinates_invalid_handle() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let invalid_handle = DelaunayVertexHandle {
@@ -778,7 +712,7 @@ mod tests {
 
     #[test]
     fn test_face_vertices() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let faces: Vec<_> = backend.faces().collect();
@@ -805,7 +739,7 @@ mod tests {
 
     #[test]
     fn test_face_vertices_invalid_handle() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let invalid_handle = DelaunayFaceHandle {
@@ -817,7 +751,7 @@ mod tests {
 
     #[test]
     fn test_edge_endpoints() {
-        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let edges: Vec<_> = backend.edges().collect();
@@ -844,7 +778,7 @@ mod tests {
 
     #[test]
     fn test_edge_endpoints_invalid_handle() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let invalid_handle = DelaunayEdgeHandle { id: 999_999 };
@@ -854,7 +788,7 @@ mod tests {
 
     #[test]
     fn test_adjacent_faces() {
-        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let vertices: Vec<_> = backend.vertices().collect();
@@ -884,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_incident_edges() {
-        let tds = generate_random_delaunay2(4, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let vertices: Vec<_> = backend.vertices().collect();
@@ -914,7 +848,7 @@ mod tests {
 
     #[test]
     fn test_face_neighbors() {
-        let tds = generate_random_delaunay2(5, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let faces: Vec<_> = backend.faces().collect();
@@ -944,7 +878,7 @@ mod tests {
 
     #[test]
     fn test_face_neighbors_invalid_handle() {
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         let invalid_handle = DelaunayFaceHandle {
@@ -999,7 +933,7 @@ mod tests {
     #[test]
     fn test_minimal_triangulation_queries() {
         // Test with minimal valid triangulation (3 vertices, 1 face)
-        let tds = generate_random_delaunay2(3, (0.0, 10.0));
+        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
         let backend = DelaunayBackend::from_tds(tds);
 
         // Test all vertices are accessible

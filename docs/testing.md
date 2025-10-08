@@ -151,9 +151,21 @@
 - **Error paths**: 70%+ coverage
 - **Edge cases**: Document untestable scenarios
 
+## GitHub Actions Validation
+
+To lint all workflow files before pushing changes, run:
+
+```bash
+just action-lint
+```
+
+This command requires the [`actionlint`](https://github.com/rhysd/actionlint) binary (available via Homebrew) and validates every workflow in `.github/workflows/`.
+
 ## Next Steps
 
-1. Run `cargo tarpaulin --out Html` to generate detailed HTML coverage report
+1. Run `just coverage` to regenerate `tarpaulin-report.json` (HTML output lives in `target/tarpaulin/`) and use `just coverage-report`
+   for a quick JSON summary whenever that file is available. If you only need the summary and the JSON already exists,
+   you can skip regenerating coverage.
 2. Prioritize testing unimplemented TriangulationMut operations
 3. Add integration tests for complete simulation workflows with moves
 4. Set up CI to track coverage trends over time
