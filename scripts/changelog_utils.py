@@ -984,7 +984,7 @@ This tool replaces both generate_changelog.sh and tag-from-changelog.sh.
 def _show_version() -> None:
     """Show version information."""
     print("changelog-utils v0.4.1 (Python implementation)")
-    print("Part of delaunay-scripts package")
+    print("Part of causal-dynamical-triangulations tooling")
 
 
 def _execute_changelog_generation(debug_mode: bool) -> None:
@@ -1089,7 +1089,8 @@ def _get_repository_url() -> str:
         return ChangelogUtils.get_repository_url()
     except GitRepoError:
         fallback = os.getenv(
-            "CHANGELOG_REPO_URL", "https://github.com/acgetchell/delaunay"
+            "CHANGELOG_REPO_URL",
+            "https://github.com/acgetchell/causal-dynamical-triangulations",
         )
         print(
             f"Warning: Could not detect repository URL, using fallback: {fallback}",
@@ -1353,7 +1354,7 @@ class ChangelogProcessor:
         if not self.in_merged_prs_section:
             return False
 
-        pr_match = re.search(r"^- .*?\[`#(?P<pr>\d+)`\]\(.*\)\s*$", line)
+        pr_match = re.search(r"^- .*?\[`#(?P<pr>\d+)`\]\(.*\)(?:\s+.*)?$", line)
         if not pr_match:
             return False
 

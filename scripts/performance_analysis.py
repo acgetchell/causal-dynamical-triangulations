@@ -6,6 +6,7 @@ Provides detailed statistics, trend analysis, and regression detection.
 import json
 import sys
 import argparse
+import math
 import statistics
 import shutil
 from pathlib import Path
@@ -181,9 +182,6 @@ class PerformanceAnalyzer:
             if change_percent > threshold:
                 comparison["regressions"].append(change_data)
             elif change_percent < -threshold:
-                change_data["change_percent"] = abs(
-                    change_percent
-                )  # Make positive for display
                 comparison["improvements"].append(change_data)
             else:
                 comparison["stable"].append(change_data)
@@ -191,12 +189,11 @@ class PerformanceAnalyzer:
         # Calculate summary statistics
         all_changes = [
             item["change_percent"]
-            for item in comparison["regressions"]
-            + [
-                {"change_percent": -item["change_percent"]}
-                for item in comparison["improvements"]
-            ]
-            + comparison["stable"]
+            for item in (
+                comparison["regressions"]
+                + comparison["improvements"]
+                + comparison["stable"]
+            )
         ]
 
         if all_changes:
@@ -212,7 +209,8 @@ class PerformanceAnalyzer:
                     [r["change_percent"] for r in comparison["regressions"]], default=0
                 ),
                 "max_improvement": max(
-                    [i["change_percent"] for i in comparison["improvements"]], default=0
+                    (abs(i["change_percent"]) for i in comparison["improvements"]),
+                    default=0,
                 ),
             }
 
@@ -250,12 +248,13 @@ class PerformanceAnalyzer:
             print("🟢 PERFORMANCE IMPROVEMENTS:")
             for imp in sorted(
                 comparison["improvements"],
-                key=lambda x: x["change_percent"],
+                key=lambda x: abs(x["change_percent"]),
                 reverse=True,
             ):
                 current_time = self.format_time_ns(imp["current_ns"])
                 baseline_time = self.format_time_ns(imp["baseline_ns"])
-                print(f"  {imp['benchmark']}: +{imp['change_percent']:.1f}% faster")
+                improvement_pct = abs(imp["change_percent"])
+                print(f"  {imp['benchmark']}: +{improvement_pct:.1f}% faster")
                 print(f"    Current: {current_time}, Baseline: {baseline_time}")
             print()
 
@@ -324,10 +323,15 @@ class PerformanceAnalyzer:
             ):
                 current_time = self.format_time_ns(reg["current_ns"])
                 baseline_time = self.format_time_ns(reg["baseline_ns"])
-                ratio = reg["current_ns"] / reg["baseline_ns"]
+                ratio = (
+                    reg["current_ns"] / reg["baseline_ns"]
+                    if reg["baseline_ns"] != 0
+                    else float("inf")
+                )
+                ratio_display = "∞" if math.isinf(ratio) else f"{ratio:.2f}"
 
                 lines.append(
-                    f"| {reg['benchmark']} | +{reg['change_percent']:.1f}% | {current_time} | {baseline_time} | {ratio:.2f}x |"
+                    f"| {reg['benchmark']} | +{reg['change_percent']:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |"
                 )
             lines.append("")
 
@@ -338,15 +342,21 @@ class PerformanceAnalyzer:
 
             for imp in sorted(
                 comparison["improvements"],
-                key=lambda x: x["change_percent"],
+                key=lambda x: abs(x["change_percent"]),
                 reverse=True,
             ):
                 current_time = self.format_time_ns(imp["current_ns"])
                 baseline_time = self.format_time_ns(imp["baseline_ns"])
-                ratio = imp["baseline_ns"] / imp["current_ns"]
+                ratio = (
+                    imp["baseline_ns"] / imp["current_ns"]
+                    if imp["current_ns"] != 0
+                    else float("inf")
+                )
+                ratio_display = "∞" if math.isinf(ratio) else f"{ratio:.2f}"
+                improvement_pct = abs(imp["change_percent"])
 
                 lines.append(
-                    f"| {imp['benchmark']} | -{imp['change_percent']:.1f}% | {current_time} | {baseline_time} | {ratio:.2f}x |"
+                    f"| {imp['benchmark']} | -{improvement_pct:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |"
                 )
             lines.append("")
 
@@ -436,6 +446,8 @@ class PerformanceAnalyzer:
                 else:
                     slope = (n * sum_xy - sum_x * sum_y) / denominator
 
+                # Use small epsilon for floating point comparison
+                epsilon = 1e-9
                 trends[benchmark] = {
                     "slope": slope,
                     "trend": "improving"
@@ -446,9 +458,11 @@ class PerformanceAnalyzer:
                     "data_points": n,
                     "first_value": values[0],
                     "last_value": values[-1],
-                    "change_percent": ((values[-1] - values[0]) / values[0]) * 100
-                    if values[0] != 0
-                    else 0,
+                    "change_percent": (
+                        ((values[-1] - values[0]) / values[0]) * 100
+                        if abs(values[0]) > epsilon
+                        else 0
+                    ),
                 }
 
         return {
@@ -494,6 +508,9 @@ Examples:
         help="Regression threshold percentage (default: 10.0)",
     )
     parser.add_argument("--compare", help="Compare with specific baseline file")
+    parser.add_argument(
+        "--project-root", type=Path, help="Path to the project root directory"
+    )
     parser.add_argument("--report", help="Generate detailed report to specified file")
     parser.add_argument(
         "--trends", type=int, metavar="DAYS", help="Analyze trends over N days"
@@ -507,17 +524,31 @@ Examples:
 
     args = parser.parse_args()
 
-    current = Path(__file__).resolve().parent
     project_root: Optional[Path] = None
 
-    while current != current.parent:
-        if (current / "Cargo.toml").exists() or (current / ".git").exists():
-            project_root = current
-            break
-        current = current.parent
+    if args.project_root:
+        provided_root = args.project_root.resolve()
+        if not (
+            (provided_root / "Cargo.toml").exists() or (provided_root / ".git").exists()
+        ):
+            print("❌ Provided project root does not contain Cargo.toml or .git")
+            return 1
+        project_root = provided_root
+    else:
+        current = Path(__file__).resolve().parent
+        while current != current.parent:
+            if (current / "Cargo.toml").exists() or (current / ".git").exists():
+                project_root = current
+                break
+            current = current.parent
 
     if project_root is None:
-        project_root = Path(__file__).resolve().parent.parent
+        print("❌ Could not detect project root (no Cargo.toml or .git found)")
+        print(
+            "   Please run this script from within the project or specify --project-root"
+        )
+        return 1
+
     analyzer = PerformanceAnalyzer(project_root)
 
     # Handle trend analysis
