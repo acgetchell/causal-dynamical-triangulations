@@ -76,6 +76,8 @@
         "oneline",
         "Pachner",
         "pathlib",
+        "pipefail",
+        "coverable",
         "phpcs",
         "phpmd",
         "physrep",

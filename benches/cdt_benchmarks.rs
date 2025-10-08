@@ -17,7 +17,9 @@ use causal_dynamical_triangulations::{
     },
     geometry::{CdtTriangulation2D, traits::TriangulationQuery},
 };
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
+};
 
 /// Benchmark triangulation creation with different vertex counts
 fn bench_triangulation_creation(c: &mut Criterion) {
@@ -187,8 +189,7 @@ fn bench_action_calculations(c: &mut Criterion) {
 fn bench_ergodic_moves(c: &mut Criterion) {
     let mut group = c.benchmark_group("ergodic_moves");
 
-    let mut ergodics = ErgodicsSystem::new();
-    let mut test_triangulation = vec![vec![0, 1, 2], vec![1, 2, 3]]; // Simple test data
+    let seed_triangulation = vec![vec![0, 1, 2], vec![1, 2, 3]]; // Simple test data
 
     // Benchmark different move types
     let move_types = [
@@ -203,33 +204,45 @@ fn bench_ergodic_moves(c: &mut Criterion) {
             BenchmarkId::new("move", format!("{move_type:?}")),
             &move_type,
             |b, &move_type| {
-                b.iter(|| {
-                    let result = match move_type {
-                        MoveType::Move22 => ergodics.attempt_22_move(&mut test_triangulation),
-                        MoveType::Move13Add => ergodics.attempt_13_move(&mut test_triangulation),
-                        MoveType::Move31Remove => ergodics.attempt_31_move(&mut test_triangulation),
-                        MoveType::EdgeFlip => ergodics.attempt_edge_flip(&mut test_triangulation),
-                    };
-                    black_box(result)
-                });
+                b.iter_batched(
+                    || (ErgodicsSystem::new(), seed_triangulation.clone()),
+                    |(mut ergodics, mut triangulation)| {
+                        let result = match move_type {
+                            MoveType::Move22 => ergodics.attempt_22_move(&mut triangulation),
+                            MoveType::Move13Add => ergodics.attempt_13_move(&mut triangulation),
+                            MoveType::Move31Remove => ergodics.attempt_31_move(&mut triangulation),
+                            MoveType::EdgeFlip => ergodics.attempt_edge_flip(&mut triangulation),
+                        };
+                        black_box(result)
+                    },
+                    BatchSize::SmallInput,
+                );
             },
         );
     }
 
-    // Benchmark random move selection
+    // Benchmark random move selection (stateless, no reset needed)
     group.bench_function("random_move_selection", |b| {
-        b.iter(|| {
-            let move_type = ergodics.select_random_move();
-            black_box(move_type)
-        });
+        b.iter_batched(
+            ErgodicsSystem::new,
+            |mut ergodics| {
+                let move_type = ergodics.select_random_move();
+                black_box(move_type)
+            },
+            BatchSize::SmallInput,
+        );
     });
 
-    // Benchmark random move attempt
+    // Benchmark random move attempt (needs fresh triangulation each time)
     group.bench_function("random_move_attempt", |b| {
-        b.iter(|| {
-            let result = ergodics.attempt_random_move(&mut test_triangulation);
-            black_box(result)
-        });
+        b.iter_batched(
+            || (ErgodicsSystem::new(), seed_triangulation.clone()),
+            |(mut ergodics, mut triangulation)| {
+                let result = ergodics.attempt_random_move(&mut triangulation);
+                black_box(result)
+            },
+            BatchSize::SmallInput,
+        );
     });
 
     group.finish();

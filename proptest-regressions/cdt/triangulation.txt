@@ -9,3 +9,7 @@ cc 6a913cccf0988c1371081c5b1d2fc29b7998154c8b2e3f8673e6c3263f5ac51a # shrinks to
 cc e5b5d97220ed7a7bd10f303025141c40115a97828c3fe743b59e2ec4018c0435 # shrinks to vertices = 14, timeslices = 1
 cc 2cbc809cc91c9b854d16ad24d902da153cbad48d2988824ad5a9c6b53ca42506 # shrinks to vertices = 10, timeslices = 2
 cc b0ab83098c71ab3b1c74f6845719575d726171a886fa3c6ff6c1ce8c8969461b # shrinks to vertices = 19, timeslices = 4
+cc fa00790622167561ea6d9810d1edac368cacce03316285c678b18e58d9f72735 # shrinks to vertices = 13, timeslices = 1
+cc de00fa8d68c4dac56dc68c3a4a4849c80f75a8f1214c27fccf44550f01d0b609 # shrinks to vertices = 14, timeslices = 1
+cc a148db15cebd111c2333f611c06a608967d543115eef6feacb34af5a760b4b18 # shrinks to vertices = 11, timeslices = 1
+cc 322d895144ec08f74deb3c3db1fcb6b25e876353340f887e78d242871a40a73b # shrinks to vertices = 13, timeslices = 1, seed = 9798

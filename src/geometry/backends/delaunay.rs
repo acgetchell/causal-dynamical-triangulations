@@ -462,35 +462,6 @@ where
 /// Type alias for common 2D Delaunay backend
 pub type DelaunayBackend2D = DelaunayBackend<f64, i32, i32, 2>;
 
-/// Generates a random Delaunay triangulation with enhanced error context.
-///
-/// # Deprecated
-/// Use `crate::util::generate_delaunay2_with_context` instead.
-///
-/// # Errors
-///
-/// Returns error if triangulation generation fails due to invalid parameters.
-#[deprecated(note = "Use crate::util::generate_delaunay2_with_context instead")]
-pub fn try_generate_random_delaunay2_with_context(
-    number_of_vertices: u32,
-    coordinate_range: (f64, f64),
-) -> crate::errors::CdtResult<delaunay::core::Tds<f64, i32, i32, 2>> {
-    crate::util::generate_delaunay2_with_context(number_of_vertices, coordinate_range, None)
-}
-
-/// Generates a random Delaunay triangulation with the specified number of vertices.
-///
-/// # Deprecated  
-/// Use `crate::util::generate_random_delaunay2` instead.
-#[deprecated(note = "Use crate::util::generate_random_delaunay2 instead")]
-#[must_use]
-pub fn generate_random_delaunay2(
-    number_of_vertices: u32,
-    coordinate_range: (f64, f64),
-) -> delaunay::core::Tds<f64, i32, i32, 2> {
-    crate::util::generate_random_delaunay2(number_of_vertices, coordinate_range)
-}
-
 /// Counts edges in any Tds structure using a consistent algorithm.
 /// This is the canonical edge counting implementation used throughout the codebase.
 #[must_use]

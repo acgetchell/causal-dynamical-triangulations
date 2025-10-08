@@ -8,6 +8,7 @@ import os
 import sys
 import argparse
 import statistics
+import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -105,11 +106,18 @@ class PerformanceAnalyzer:
         with open(baseline_file, 'w') as f:
             json.dump(results, f, indent=2)
         
-        # Update latest symlink
+        # Update latest symlink (with Windows fallback)
+        # On Windows, symlinks require elevated privileges, so we fall back to file copying
         latest_link = self.baseline_dir / "latest.json"
-        if latest_link.exists():
-            latest_link.unlink()
-        latest_link.symlink_to(filename)
+        try:
+            latest_link.unlink(missing_ok=True)
+            latest_link.symlink_to(filename)
+        except (OSError, NotImplementedError):
+            # Fallback for Windows or systems without symlink support
+            # Use file copy instead of symlink to ensure cross-platform compatibility
+            if latest_link.exists():
+                latest_link.unlink()
+            shutil.copy2(baseline_file, latest_link)
         
         print(f"✅ Saved baseline: {baseline_file}")
         return baseline_file

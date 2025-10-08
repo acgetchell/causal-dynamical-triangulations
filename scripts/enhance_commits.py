@@ -340,6 +340,19 @@ def _process_changelog_lines(lines):
             line_index += 1
             continue
 
+        # Handle unrecognized ### headers - flush any pending entries
+        if line.startswith("### ") and any(section_state.values()):
+            if categorize_entries_list:
+                process_and_output_categorized_entries(categorize_entries_list, output_lines)
+                categorize_entries_list.clear()
+            section_state.update(
+                {
+                    "in_changes_section": False,
+                    "in_fixed_issues": False,
+                    "in_merged_prs_section": False,
+                },
+            )
+
         # Process commit lines in Changes or Fixed Issues sections FIRST
         if (section_state["in_changes_section"] or section_state["in_fixed_issues"]) and COMMIT_BULLET_RE.match(line):
             entry, next_index = _collect_commit_entry(lines, line_index)

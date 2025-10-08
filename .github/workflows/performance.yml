@@ -7,20 +7,22 @@ on:
   # Run on pull requests to detect regressions
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-      - '.github/**'
-      - '!.github/workflows/performance.yml'
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!.github/**'
+      - '.github/workflows/performance.yml'
   
   # Run on main branch to establish/update baselines
   push:
     branches: [main]
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-      - '.github/**'
-      - '!.github/workflows/performance.yml'
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!.github/**'
+      - '.github/workflows/performance.yml'
   
   # Allow manual triggering
   workflow_dispatch:
@@ -80,6 +82,15 @@ jobs:
           # Check for benchmark configuration in Cargo.toml
           if ! grep -q "\[\[bench\]\]" Cargo.toml; then
             echo "⚠️  Warning: No benchmark configuration found in Cargo.toml"
+          else
+            echo "✅ Found benchmark configuration in Cargo.toml"
+          fi
+          
+          # Validate benchmarks can compile
+          if cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
+            echo "✅ Benchmarks compile successfully"
+          else
+            echo "⚠️  Warning: Benchmarks may not compile properly"
           fi
           
           # Verify performance analysis script is available
@@ -115,14 +126,14 @@ jobs:
           echo "🔄 Running benchmarks on main branch and saving baseline..."
           
           # Check if benchmarks exist before running
-          if ! cargo bench --list | grep -q 'bench'; then
+          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
             echo "⚠️  No benchmarks found to run"
             echo "Skipping baseline creation"
             exit 0
           fi
           
           # Run performance analysis with error handling
-          if ! uv run performance-analysis --save-baseline --tag "main-${{ github.sha }}"; then
+          if ! uv run performance-analysis --save-baseline --tag "main-${GITHUB_SHA}"; then
             echo "❌ Failed to run benchmarks or save baseline"
             echo "Check benchmark configuration and performance_analysis.py script"
             exit 1
@@ -140,47 +151,48 @@ jobs:
           echo "🔄 Running performance regression check..."
           
           # Check if benchmarks exist before running
-          if ! cargo bench --list | grep -q 'bench'; then
+          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
             echo "⚠️  No benchmarks found to run"
-            echo "result=no_benchmarks" >> $GITHUB_OUTPUT
-            echo "regression=false" >> $GITHUB_OUTPUT
+            echo "result=no_benchmarks" >> "$GITHUB_OUTPUT"
+            echo "regression=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           
           # Set threshold from input or default
-          THRESHOLD="${{ github.event.inputs.threshold || '10.0' }}"
+          THRESHOLD="${PERF_THRESHOLD_INPUT:-10.0}"
           echo "Using regression threshold: $THRESHOLD%"
           
           # Run performance analysis with custom threshold
           if uv run performance-analysis --threshold "$THRESHOLD" --report "performance_report.md"; then
-            echo "result=success" >> $GITHUB_OUTPUT
-            echo "regression=false" >> $GITHUB_OUTPUT
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "regression=false" >> "$GITHUB_OUTPUT"
             echo "✅ Performance check completed successfully"
           else
             PERF_EXIT_CODE=$?
             if [[ $PERF_EXIT_CODE -eq 1 ]]; then
-              echo "result=regression" >> $GITHUB_OUTPUT  
-              echo "regression=true" >> $GITHUB_OUTPUT
+              echo "result=regression" >> "$GITHUB_OUTPUT"
+              echo "regression=true" >> "$GITHUB_OUTPUT"
               echo "🔴 Performance regressions detected"
             else
-              echo "result=error" >> $GITHUB_OUTPUT
-              echo "regression=false" >> $GITHUB_OUTPUT
+              echo "result=error" >> "$GITHUB_OUTPUT"
+              echo "regression=false" >> "$GITHUB_OUTPUT"
               echo "❌ Performance analysis failed with exit code: $PERF_EXIT_CODE"
             fi
           fi
         env:
           RUST_BACKTRACE: 1
+          PERF_THRESHOLD_INPUT: ${{ github.event.inputs.threshold }}
         continue-on-error: true
 
       # For manual runs: handle custom options
       - name: Run manual performance analysis
         if: github.event_name == 'workflow_dispatch'
         run: |
-          THRESHOLD="${{ github.event.inputs.threshold }}"
-          SAVE_BASELINE="${{ github.event.inputs.save_baseline }}"
+          THRESHOLD="${MANUAL_THRESHOLD_INPUT:-10.0}"
+          SAVE_BASELINE="${MANUAL_SAVE_BASELINE_INPUT}"
           
           # Check if benchmarks exist before running
-          if ! cargo bench --list | grep -q 'bench'; then
+          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
             echo "⚠️  No benchmarks found to run"
             echo "Ensure you have benchmark configurations in Cargo.toml"
             exit 1
@@ -188,7 +200,7 @@ jobs:
           
           if [ "$SAVE_BASELINE" = "true" ]; then
             echo "🔄 Saving performance baseline..."
-            if ! uv run performance-analysis --save-baseline --tag "manual-${{ github.sha }}"; then
+            if ! uv run performance-analysis --save-baseline --tag "manual-${GITHUB_SHA}"; then
               echo "❌ Failed to save baseline"
               exit 1
             fi
@@ -203,6 +215,8 @@ jobs:
           fi
         env:
           RUST_BACKTRACE: 1
+          MANUAL_THRESHOLD_INPUT: ${{ github.event.inputs.threshold }}
+          MANUAL_SAVE_BASELINE_INPUT: ${{ github.event.inputs.save_baseline }}
 
       # Upload performance report as artifact
       - name: Upload performance report
@@ -279,6 +293,15 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
+
+      # Fail the workflow on performance analysis errors
+      - name: Fail on performance analysis errors
+        if: github.event_name == 'pull_request' && steps.perf_check.outputs.result == 'error'
+        run: |
+          echo "❌ Performance analysis encountered an error."
+          echo "Review the workflow logs and performance script output."
+          echo "This could indicate issues with benchmark compilation or execution."
+          exit 1
 
       # Fail the workflow if regressions detected (for PR blocking)
       - name: Check for performance regressions
