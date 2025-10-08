@@ -1,22 +1,82 @@
 name: Kani CI
 on:
   push:
+    branches:
+      - main
   pull_request:
-    # Run on merged pull requests
-    types: [ closed ]
+    types:
+      - opened
+      - synchronize
+      - reopened
   workflow_dispatch:
+
+concurrency:
+  group: kani-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  run-kani:
+  kani-fast:
+    if: github.event_name == 'pull_request'
+    name: Fast Kani (pull request)
     runs-on: ubuntu-latest
     steps:
-      - name: 'Checkout your code.'
+      - name: Checkout
         uses: actions/checkout@v5
-      
-      - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@2fcdc490d667999e01ddbbf0f2823181beef6b39  # v1.15.0
-        with:
-          cache: true  # Built-in caching
-          # toolchain, components, etc. are specified in rust-toolchain.toml
 
-      - name: Run Kani
-        uses: model-checking/kani-github-action@f838096619a707b0f6b2118cf435eaccfa33e51f # v1.1
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@2fcdc490d667999e01ddbbf0f2823181beef6b39
+        with:
+          cache: true
+
+      - name: Cache Kani artifacts
+        uses: actions/cache@v4
+        with:
+          path: target/kani
+          key: ${{ runner.os }}-kani-fast-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-kani-fast-
+            ${{ runner.os }}-kani-
+
+      - name: Pre-fetch dependencies
+        run: cargo fetch
+
+      - name: Run Kani harness
+        uses: model-checking/kani-github-action@f838096619a707b0f6b2118cf435eaccfa33e51f
+        with:
+          args: --harness verify_action_config
+
+  kani-full:
+    if: github.event_name != 'pull_request'
+    name: Full Kani
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - verify_action_config
+          - verify_regge_action_properties
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@2fcdc490d667999e01ddbbf0f2823181beef6b39
+        with:
+          cache: true
+
+      - name: Cache Kani artifacts
+        uses: actions/cache@v4
+        with:
+          path: target/kani
+          key: ${{ runner.os }}-kani-${{ matrix.harness }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-kani-${{ matrix.harness }}-
+            ${{ runner.os }}-kani-
+
+      - name: Pre-fetch dependencies
+        run: cargo fetch
+
+      - name: Run Kani harness
+        uses: model-checking/kani-github-action@f838096619a707b0f6b2118cf435eaccfa33e51f
+        with:
+          args: --harness ${{ matrix.harness }}

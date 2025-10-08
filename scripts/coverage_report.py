@@ -126,7 +126,9 @@ def coverage_entries(data: dict) -> Iterable[CoverageEntry]:
         else:
             path = Path(raw_path)
         coverage = (covered / coverable) * 100
-        yield CoverageEntry(coverage=coverage, coverable=coverable, covered=covered, path=path)
+        yield CoverageEntry(
+            coverage=coverage, coverable=coverable, covered=covered, path=path
+        )
 
 
 def filter_entries(
@@ -176,7 +178,9 @@ def main() -> None:
         print(f"No coverable files found{prefix_message}.")
         return
 
-    sorted_entries = sorted(filtered, key=lambda item: item.coverage, reverse=args.descending)
+    sorted_entries = sorted(
+        filtered, key=lambda item: item.coverage, reverse=args.descending
+    )
     if args.limit is not None:
         sorted_entries = sorted_entries[: args.limit]
 

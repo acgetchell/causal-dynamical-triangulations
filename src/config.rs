@@ -484,6 +484,29 @@ mod tests {
             ..CdtConfig::new(32, 3)
         };
         assert!(measurement_frequency_exceeds_steps.validate().is_err());
+
+        let zero_measurement_steps = CdtConfig {
+            steps: 10,
+            thermalization_steps: 10,
+            measurement_frequency: 5,
+            ..CdtConfig::new(32, 3)
+        };
+        assert!(
+            zero_measurement_steps.validate().is_ok(),
+            "Configurations with zero post-thermalization steps but valid frequencies should pass validation"
+        );
+
+        let insufficient_measurements = CdtConfig {
+            steps: 20,
+            thermalization_steps: 15,
+            measurement_frequency: 10,
+            ..CdtConfig::new(32, 3)
+        };
+        let error = insufficient_measurements.validate().unwrap_err();
+        assert!(
+            error.contains("No measurements will be taken"),
+            "Unexpected validation error: {error}"
+        );
     }
 
     #[test]

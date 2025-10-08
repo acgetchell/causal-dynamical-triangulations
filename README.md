@@ -159,15 +159,21 @@ performance testing workflow documentation.
 The library uses [Kani] model checker for formal verification of critical properties:
 
 ```bash
-# Run all proofs
+# Run all proofs (runs per harness matrix in CI on main and scheduled jobs)
 just kani
 
-# Fast verification (subset of proofs)
+# Fast verification (single critical harness, default on pull requests)
 just kani-fast
 
 # Individual harnesses
 cargo kani --harness verify_action_config
+cargo kani --harness verify_regge_action_properties
 ```
+
+### Workflow behavior
+
+- Pull requests run the fast harness set for quick feedback.
+- Pushes to `main` (and manual dispatch) run every harness in parallel via GitHub Actions matrix jobs.
 
 ## 🛣️ Roadmap
 

@@ -6,11 +6,11 @@
 action-lint:
     git ls-files -z '.github/workflows/*.yml' '.github/workflows/*.yaml' | xargs -0 -r actionlint
 
-bench-compile:
-    cargo bench --workspace --no-run
-
 bench:
     cargo bench --workspace
+
+bench-compile:
+    cargo bench --workspace --no-run
 
 build:
     cargo build
@@ -68,6 +68,7 @@ help-workflows:
     @echo "  just dev           # Quick development cycle (format, lint, test)"
     @echo "  just kani          # Run all Kani formal verification proofs"
     @echo "  just kani-fast     # Run fast Kani verification (ActionConfig only)"
+    @echo "  just python-lint   # Lint and format Python scripts with Ruff"
     @echo "  just quality       # All quality checks"
     @echo "  just run -- <args> # Run with custom arguments"
     @echo "  just run-example   # Run with example arguments"
@@ -138,7 +139,11 @@ perf-report file="":
 perf-trends days="7":
     uv run performance-analysis --trends {{days}}
 
-quality: fmt clippy doc-check shell-lint markdown-lint spell-check validate-json validate-toml action-lint
+python-lint:
+    uv run ruff check scripts/ --fix
+    uv run ruff format scripts/
+
+quality: fmt clippy doc-check python-lint shell-lint markdown-lint spell-check validate-json validate-toml action-lint
     @echo "✅ All quality checks passed!"
 
 run *args:
@@ -161,6 +166,10 @@ setup:
     @echo "  - jq: via package manager"
     @echo "  - Node.js (for npx/cspell): https://nodejs.org"
     @echo "  - cargo-tarpaulin: cargo install cargo-tarpaulin"
+    @echo "  - python-lint tooling: installed via 'uv sync --group dev'"
+    @echo ""
+    @echo "Installing Python tooling (ruff and related dependencies)..."
+    uv sync --group dev
     @echo ""
     @echo "Installing Kani verifier for formal verification (required for CI simulation)..."
     cargo install --locked kani-verifier
@@ -202,4 +211,4 @@ validate-json:
     git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
 
 validate-toml:
-    git ls-files -z '*.toml' | xargs -0 -r -I {} sh -c 'uv run python -c "import tomllib; tomllib.load(open(\"{}\", \"rb\")); print(\"{} is valid TOML\")"'
+    git ls-files -z '*.toml' | xargs -0 -r -I {} uv run python -c "import tomllib; tomllib.load(open('{}', 'rb')); print('{} is valid TOML')"

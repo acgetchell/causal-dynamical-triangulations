@@ -427,7 +427,9 @@ class ChangelogUtils:
             GitRepoError: If git command fails
         """
         try:
-            result = _run_git_command(["--no-pager", "show", commit_sha, "--format=%B", "--no-patch"])
+            result = _run_git_command(
+                ["--no-pager", "show", commit_sha, "--format=%B", "--no-patch"]
+            )
             return result.stdout
         except subprocess.CalledProcessError as e:
             msg = f"Failed to get commit message for {commit_sha}: {e}"
@@ -448,7 +450,10 @@ class ChangelogUtils:
         content_lines = []
 
         # Skip the first line (PR title) and empty lines at start
-        trailer_re = re.compile(r"^\s*(Co-authored-by|Signed-off-by|Change-Id|Reviewed-on|Reviewed-by|Refs|See-Also):", re.I)
+        trailer_re = re.compile(
+            r"^\s*(Co-authored-by|Signed-off-by|Change-Id|Reviewed-on|Reviewed-by|Refs|See-Also):",
+            re.I,
+        )
         for line in lines[1:]:
             if trailer_re.match(line):
                 continue
@@ -498,7 +503,9 @@ class ChangelogUtils:
         return entries
 
     @staticmethod
-    def _format_entries(entries: list[dict[str, Any]], commit_sha: str, repo_url: str) -> str:
+    def _format_entries(
+        entries: list[dict[str, Any]], commit_sha: str, repo_url: str
+    ) -> str:
         """
         Format parsed entries into markdown output.
 
@@ -518,17 +525,23 @@ class ChangelogUtils:
                 output_lines.append("")  # Blank line between entries
 
             # Format title with commit link
-            title_lines = ChangelogUtils._format_entry_title(entry["title"], commit_sha, repo_url, max_line_length)
+            title_lines = ChangelogUtils._format_entry_title(
+                entry["title"], commit_sha, repo_url, max_line_length
+            )
             output_lines.extend(title_lines)
 
             # Format body content
-            body_lines = ChangelogUtils._format_entry_body(entry["body_lines"], max_line_length)
+            body_lines = ChangelogUtils._format_entry_body(
+                entry["body_lines"], max_line_length
+            )
             output_lines.extend(body_lines)
 
         return "\n".join(output_lines)
 
     @staticmethod
-    def _format_entry_title(title: str, commit_sha: str, repo_url: str, max_line_length: int) -> list[str]:
+    def _format_entry_title(
+        title: str, commit_sha: str, repo_url: str, max_line_length: int
+    ) -> list[str]:
         """
         Format an entry title with commit link.
 
@@ -542,7 +555,9 @@ class ChangelogUtils:
             List of formatted title lines
         """
         escaped_title = ChangelogUtils.escape_markdown(title)
-        title_line = f"- **{escaped_title}** [`{commit_sha}`]({repo_url}/commit/{commit_sha})"
+        title_line = (
+            f"- **{escaped_title}** [`{commit_sha}`]({repo_url}/commit/{commit_sha})"
+        )
 
         # Keep bolded title intact; place commit link on its own line if too long
         if len(title_line) <= max_line_length:
@@ -560,8 +575,12 @@ class ChangelogUtils:
             use_bold = wrap_width >= 8
             if not use_bold:
                 first_prefix, cont_prefix, bold_suffix = "- ", "  ", ""
-                avail_first = max(1, max_line_length - len(first_prefix) - len(bold_suffix))
-                avail_cont = max(1, max_line_length - len(cont_prefix) - len(bold_suffix))
+                avail_first = max(
+                    1, max_line_length - len(first_prefix) - len(bold_suffix)
+                )
+                avail_cont = max(
+                    1, max_line_length - len(cont_prefix) - len(bold_suffix)
+                )
                 wrap_width = min(avail_first, avail_cont)
 
             wrapped_title_lines = textwrap.wrap(
@@ -574,7 +593,9 @@ class ChangelogUtils:
             result_lines: list[str] = []
             for i, line in enumerate(wrapped_title_lines):
                 prefix = first_prefix if i == 0 else cont_prefix
-                result_lines.append(f"{prefix}{line}{bold_suffix}" if use_bold else f"{prefix}{line}")
+                result_lines.append(
+                    f"{prefix}{line}{bold_suffix}" if use_bold else f"{prefix}{line}"
+                )
 
             # Add commit link on a separate line; split only if necessary.
             commit_link = f"  [`{commit_sha}`]({repo_url}/commit/{commit_sha})"
@@ -590,7 +611,11 @@ class ChangelogUtils:
         if len(commit_link) <= max_line_length:
             return [f"- **{escaped_title}**", commit_link]
         # Very short limit - split commit link too
-        return [f"- **{escaped_title}**", f"  [`{commit_sha}`]", f"  ({repo_url}/commit/{commit_sha})"]
+        return [
+            f"- **{escaped_title}**",
+            f"  [`{commit_sha}`]",
+            f"  ({repo_url}/commit/{commit_sha})",
+        ]
 
     @staticmethod
     def _format_entry_body(body_lines: list[str], max_line_length: int) -> list[str]:
@@ -625,12 +650,18 @@ class ChangelogUtils:
         for line in body_content:
             if not line:  # Empty line - preserve as paragraph break
                 output_lines.append("")
-            elif line.startswith("    ") or "```" in line or re.search(r"\[.*\]\(.*\)|https?://\S+", line):
+            elif (
+                line.startswith("    ")
+                or "```" in line
+                or re.search(r"\[.*\]\(.*\)|https?://\S+", line)
+            ):
                 # Code blocks, links, or structured content - preserve as-is
                 output_lines.append(f"  {line}")
             else:
                 # Regular text - wrap it
-                wrapped_lines = ChangelogUtils.wrap_markdown_line(line, max_line_length, "  ")
+                wrapped_lines = ChangelogUtils.wrap_markdown_line(
+                    line, max_line_length, "  "
+                )
                 output_lines.extend(wrapped_lines)
 
         return output_lines
@@ -658,7 +689,9 @@ class ChangelogUtils:
                 err = (e.stderr or e.stdout or str(e)).strip()
                 msg = f"Git command failed: git {' '.join(args)}: {err}"
                 raise GitRepoError(msg) from e
-            return e.stdout.strip() if hasattr(e, "stdout") and e.stdout else "", e.returncode
+            return e.stdout.strip() if hasattr(
+                e, "stdout"
+            ) and e.stdout else "", e.returncode
         except Exception as exc:
             if check:
                 msg = f"Git command failed: git {' '.join(args)}: {exc}"
@@ -717,11 +750,19 @@ class ChangelogUtils:
         NC = "\033[0m"
 
         try:
-            _, result_code = ChangelogUtils.run_git_command(["rev-parse", "-q", "--verify", f"refs/tags/{tag_version}"], check=False)
+            _, result_code = ChangelogUtils.run_git_command(
+                ["rev-parse", "-q", "--verify", f"refs/tags/{tag_version}"], check=False
+            )
             if result_code == 0:
                 if not force_recreate:
-                    print(f"{YELLOW}Tag '{tag_version}' already exists.{NC}", file=sys.stderr)
-                    print("Use --force to recreate it, or delete it first with:", file=sys.stderr)
+                    print(
+                        f"{YELLOW}Tag '{tag_version}' already exists.{NC}",
+                        file=sys.stderr,
+                    )
+                    print(
+                        "Use --force to recreate it, or delete it first with:",
+                        file=sys.stderr,
+                    )
                     print(f"  git tag -d {tag_version}", file=sys.stderr)
                     raise ChangelogError(f"Tag '{tag_version}' already exists")
                 print(f"{BLUE}Deleting existing tag '{tag_version}'...{NC}")
@@ -768,7 +809,10 @@ class ChangelogUtils:
             ChangelogUtils.run_git_command(["config", "--get", "user.name"])
             ChangelogUtils.run_git_command(["config", "--get", "user.email"])
         except Exception:
-            print(f"{YELLOW}Warning: git user.name/email not configured; tag creation may fail.{NC}", file=sys.stderr)
+            print(
+                f"{YELLOW}Warning: git user.name/email not configured; tag creation may fail.{NC}",
+                file=sys.stderr,
+            )
 
     @staticmethod
     def _create_tag_with_message(tag_version: str, tag_message: str) -> None:
@@ -791,7 +835,9 @@ class ChangelogUtils:
             # Tag format already validated by validate_semver(); no second check needed
 
             # Use secure wrapper for git command with stdin input
-            run_git_command_with_input(["tag", "-a", tag_version, "-F", "-"], input_data=tag_message)
+            run_git_command_with_input(
+                ["tag", "-a", tag_version, "-F", "-"], input_data=tag_message
+            )
 
         except Exception as e:
             msg = f"Error creating tag: {e}"
@@ -813,7 +859,9 @@ class ChangelogUtils:
         print("")
         print("Next steps:")
         print(f"  1. Push the tag: {BLUE}git push origin {tag_version}{NC}")
-        print(f"  2. Create GitHub release: {BLUE}gh release create {tag_version} --notes-from-tag{NC}")
+        print(
+            f"  2. Create GitHub release: {BLUE}gh release create {tag_version} --notes-from-tag{NC}"
+        )
 
 
 def main() -> None:
@@ -831,7 +879,7 @@ def main() -> None:
     # Set up signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Check for tag subcommand first
     if _is_tag_command():
         _handle_tag_command()
@@ -886,9 +934,13 @@ def _parse_generate_args():
     if args_to_parse and args_to_parse[0] == "generate":
         args_to_parse = args_to_parse[1:]
 
-    parser.add_argument("--debug", action="store_true", help="Preserve intermediate files for debugging")
+    parser.add_argument(
+        "--debug", action="store_true", help="Preserve intermediate files for debugging"
+    )
     parser.add_argument("--help", "-h", action="store_true", help="Show help message")
-    parser.add_argument("--version", action="store_true", help="Show version information")
+    parser.add_argument(
+        "--version", action="store_true", help="Show version information"
+    )
 
     try:
         return parser.parse_args(args_to_parse)
@@ -1001,19 +1053,29 @@ def _validate_prerequisites() -> None:
     ChangelogUtils.check_git_history()
 
     if not shutil.which("npx"):
-        print("Error: npx not found. Install Node.js (which provides npx). See https://nodejs.org/", file=sys.stderr)
+        print(
+            "Error: npx not found. Install Node.js (which provides npx). See https://nodejs.org/",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Verify auto-changelog availability
     try:
-        run_safe_command("npx", ["--yes", "-p", "auto-changelog", "auto-changelog", "--version"])
+        run_safe_command(
+            "npx", ["--yes", "-p", "auto-changelog", "auto-changelog", "--version"]
+        )
     except Exception:
-        print("Error: auto-changelog is not available via npx. Verify network access and try again.", file=sys.stderr)
+        print(
+            "Error: auto-changelog is not available via npx. Verify network access and try again.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Verify configuration files
     if not Path(".auto-changelog").exists():
-        print("Error: .auto-changelog config not found at project root.", file=sys.stderr)
+        print(
+            "Error: .auto-changelog config not found at project root.", file=sys.stderr
+        )
         sys.exit(1)
 
     template_path = Path("docs/templates/changelog.hbs")
@@ -1039,7 +1101,11 @@ def _backup_existing_changelog(file_paths: dict[str, Path]) -> None:
 def _run_auto_changelog(file_paths: dict[str, Path], project_root: Path) -> None:
     """Run auto-changelog to generate initial changelog."""
     try:
-        result = run_safe_command("npx", ["--yes", "-p", "auto-changelog", "auto-changelog", "--stdout"], cwd=project_root)
+        result = run_safe_command(
+            "npx",
+            ["--yes", "-p", "auto-changelog", "auto-changelog", "--stdout"],
+            cwd=project_root,
+        )
         file_paths["temp"].write_text(result.stdout, encoding="utf-8")
     except subprocess.CalledProcessError as e:
         if e.stderr:
@@ -1061,7 +1127,9 @@ def _post_process_dates(file_paths: dict[str, Path]) -> None:
 
 def _expand_squashed_commits(file_paths: dict[str, Path], repo_url: str) -> None:
     """Expand squashed PR commits."""
-    ChangelogGenerator.expand_squashed_prs(file_paths["processed"], file_paths["expanded"], repo_url)
+    ChangelogGenerator.expand_squashed_prs(
+        file_paths["processed"], file_paths["expanded"], repo_url
+    )
 
 
 def _enhance_with_ai(file_paths: dict[str, Path], project_root: Path) -> None:
@@ -1072,24 +1140,38 @@ def _enhance_with_ai(file_paths: dict[str, Path], project_root: Path) -> None:
         project_root / "scripts" / "enhance_commits.py",  # Project scripts directory
         Path("scripts") / "enhance_commits.py",  # Relative to current dir
     ]
-    
+
     enhance_script = None
     for script_path in script_locations:
         if script_path.exists():
             enhance_script = script_path
             break
-    
+
     if not enhance_script:
-        print(f"Error: enhance_commits.py not found in any of these locations:", file=sys.stderr)
+        print(
+            "Error: enhance_commits.py not found in any of these locations:",
+            file=sys.stderr,
+        )
         for loc in script_locations:
             print(f"  - {loc}", file=sys.stderr)
         sys.exit(1)
 
     try:
         python_exe = sys.executable or "python"
-        run_safe_command(python_exe, [str(enhance_script), str(file_paths["expanded"]), str(file_paths["enhanced"])], cwd=project_root)
+        run_safe_command(
+            python_exe,
+            [
+                str(enhance_script),
+                str(file_paths["expanded"]),
+                str(file_paths["enhanced"]),
+            ],
+            cwd=project_root,
+        )
     except Exception as e:
-        print(f"Error: enhance_commits.py failed: {e}. Verify your Python environment and try again.", file=sys.stderr)
+        print(
+            f"Error: enhance_commits.py failed: {e}. Verify your Python environment and try again.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -1098,11 +1180,11 @@ def _cleanup_final_output(file_paths: dict[str, Path]) -> None:
     content = file_paths["enhanced"].read_text(encoding="utf-8")
     lines = content.split("\n")
     cleaned_lines = []
-    
+
     i = 0
     while i < len(lines):
         line = lines[i]
-        
+
         # Remove multiple consecutive blank lines (MD012)
         if line.strip() == "":
             cleaned_lines.append(line)
@@ -1111,10 +1193,14 @@ def _cleanup_final_output(file_paths: dict[str, Path]) -> None:
                 i += 1
         else:
             # Ensure blank line before ### headings (MD022)
-            if line.startswith("### ") and cleaned_lines and cleaned_lines[-1].strip() != "":
+            if (
+                line.startswith("### ")
+                and cleaned_lines
+                and cleaned_lines[-1].strip() != ""
+            ):
                 cleaned_lines.append("")
             cleaned_lines.append(line)
-        
+
         i += 1
 
     # Remove trailing blank lines
@@ -1144,9 +1230,13 @@ def _show_success_message(file_paths: dict[str, Path]) -> None:
     """Show success message with release count."""
     try:
         content = file_paths["changelog"].read_text(encoding="utf-8")
-        release_count = len([line for line in content.split("\n") if line.startswith("## ")])
+        release_count = len(
+            [line for line in content.split("\n") if line.startswith("## ")]
+        )
         print("✅ Changelog generation completed successfully!")
-        print(f"   Processed {release_count} releases with enhanced commit categorization")
+        print(
+            f"   Processed {release_count} releases with enhanced commit categorization"
+        )
     except Exception:
         print("✅ Changelog generation completed successfully!")
 
@@ -1231,11 +1321,15 @@ class ChangelogProcessor:
         if re.match(r"^### *(Changes|Changed)$", line):
             self.current_release_has_changes_section = True
             self.changes_section_index = len(output_lines)
-            self.in_merged_prs_section = False  # Reset merged PRs state when entering Changes section
+            self.in_merged_prs_section = (
+                False  # Reset merged PRs state when entering Changes section
+            )
             return True
 
         # Reset section tracking when we hit other sections
-        if re.match(r"^### ", line) and not re.match(r"^### *Merged Pull Requests$", line):
+        if re.match(r"^### ", line) and not re.match(
+            r"^### *Merged Pull Requests$", line
+        ):
             self.in_merged_prs_section = False
 
         return False
@@ -1263,7 +1357,9 @@ class ChangelogProcessor:
 
     def _handle_commit_line(self, line: str) -> str:
         """Handle commit lines with SHA patterns."""
-        commit_match = re.search(r"- \*\*.*?\*\*.*?\[`([a-f0-9]{7,40})`\]", line) or re.search(r"- .*?\(#[0-9]+\) \[`([a-f0-9]{7,40})`\]", line)
+        commit_match = re.search(
+            r"- \*\*.*?\*\*.*?\[`([a-f0-9]{7,40})`\]", line
+        ) or re.search(r"- .*?\(#[0-9]+\) \[`([a-f0-9]{7,40})`\]", line)
 
         if not commit_match:
             return line
@@ -1287,16 +1383,22 @@ class ChangelogProcessor:
                 ],
                 check=False,
             )
-            commit_sha = sha_output.strip().splitlines()[0] if sha_output.strip() else ""
+            commit_sha = (
+                sha_output.strip().splitlines()[0] if sha_output.strip() else ""
+            )
             if commit_sha:
                 self._expand_squashed_commit(commit_sha)
         except Exception as e:
-            logging.debug("Failed to process PR squashed commit for PR #%s: %s", pr_number, e)
+            logging.debug(
+                "Failed to process PR squashed commit for PR #%s: %s", pr_number, e
+            )
 
     def _process_commit_sha(self, commit_sha: str, original_line: str) -> str:
         """Process a commit SHA and return the appropriate line."""
         try:
-            result_output, _ = ChangelogUtils.run_git_command(["--no-pager", "show", commit_sha, "--format=%s", "--no-patch"])
+            result_output, _ = ChangelogUtils.run_git_command(
+                ["--no-pager", "show", commit_sha, "--format=%s", "--no-patch"]
+            )
             commit_subject = result_output.strip()
 
             if re.search(r"\(#[0-9]+\)$", commit_subject):
@@ -1310,20 +1412,28 @@ class ChangelogProcessor:
     def _expand_squashed_commit(self, commit_sha: str) -> None:
         """Expand a squashed commit and add to pending commits."""
         try:
-            processed_commit = ChangelogUtils.process_squashed_commit(commit_sha, self.repo_url)
+            processed_commit = ChangelogUtils.process_squashed_commit(
+                commit_sha, self.repo_url
+            )
             if processed_commit.strip():
                 self.pending_expanded_commits.extend(processed_commit.split("\n"))
         except Exception as e:
             logging.debug("Failed to expand squashed commit %s: %s", commit_sha, e)
 
-    def _expand_squashed_commit_inline(self, commit_sha: str, original_line: str) -> str:
+    def _expand_squashed_commit_inline(
+        self, commit_sha: str, original_line: str
+    ) -> str:
         """Expand a squashed commit inline or return original line."""
         try:
-            processed_commit = ChangelogUtils.process_squashed_commit(commit_sha, self.repo_url)
+            processed_commit = ChangelogUtils.process_squashed_commit(
+                commit_sha, self.repo_url
+            )
             if processed_commit.strip():
                 return processed_commit
         except Exception as e:
-            logging.debug("Failed to expand squashed commit inline %s: %s", commit_sha, e)
+            logging.debug(
+                "Failed to expand squashed commit inline %s: %s", commit_sha, e
+            )
         return original_line
 
     def _insert_pending_commits(self, output_lines: list[str]) -> None:
@@ -1334,7 +1444,10 @@ class ChangelogProcessor:
         if self.current_release_has_changes_section and self.changes_section_index >= 0:
             # Add to existing Changes section - use slice insertion to preserve order and avoid O(n²)
             insert_index = self.changes_section_index + 1
-            output_lines[insert_index:insert_index] = ["", *self.pending_expanded_commits]
+            output_lines[insert_index:insert_index] = [
+                "",
+                *self.pending_expanded_commits,
+            ]
         else:
             # Create new Changes section before this release
             output_lines.extend(["", "### Changes", ""])
@@ -1356,7 +1469,10 @@ class ChangelogProcessor:
         if self.current_release_has_changes_section and self.changes_section_index >= 0:
             # Add to existing Changes section - use slice insertion to preserve order and avoid O(n²)
             insert_index = self.changes_section_index + 1
-            output_lines[insert_index:insert_index] = ["", *self.pending_expanded_commits]
+            output_lines[insert_index:insert_index] = [
+                "",
+                *self.pending_expanded_commits,
+            ]
         else:
             # Add Changes section at the end
             output_lines.extend(["", "### Changes", ""])

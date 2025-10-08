@@ -37,4 +37,6 @@ coverage_report = "coverage_report:main"
 "Repository" = "https://github.com/acgetchell/causal-dynamical-triangulations"
 
 [dependency-groups]
-dev = []
+dev = [
+    "ruff>=0.12.11",
+]

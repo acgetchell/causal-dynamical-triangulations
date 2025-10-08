@@ -238,13 +238,13 @@ def _add_section_with_entries(
     return True
 
 
-def process_and_output_categorized_entries(entries, output_lines):
+def process_and_output_categorized_entries(
+    entries: Sequence[str],
+    output_lines: MutableSequence[str],
+) -> None:
     """Categorize entries and output them in Keep a Changelog format."""
     if not entries:
         return
-
-    # Get regex patterns
-    patterns = CATEGORY_PATTERNS
 
     # Categorize all entries
     categorized = {
@@ -258,7 +258,7 @@ def process_and_output_categorized_entries(entries, output_lines):
 
     for entry in entries:
         title_text = _extract_title_text(entry)
-        category = _categorize_entry(title_text, patterns)
+        category = _categorize_entry(title_text, CATEGORY_PATTERNS)
         categorized[category].append(entry)
 
     # Output entries in Keep a Changelog order
@@ -345,7 +345,9 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
             if section_flags[0] == "merged_prs":
                 # Flush categorized entries for this release before MPRs
                 if categorize_entries_list:
-                    process_and_output_categorized_entries(categorize_entries_list, output_lines)
+                    process_and_output_categorized_entries(
+                        categorize_entries_list, output_lines
+                    )
                     categorize_entries_list.clear()
                 if output_lines and output_lines[-1] != "":
                     output_lines.append("")
@@ -356,7 +358,9 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
         # Handle unrecognized ### headers - flush any pending entries
         if line.startswith("### ") and any(section_state.values()):
             if categorize_entries_list:
-                process_and_output_categorized_entries(categorize_entries_list, output_lines)
+                process_and_output_categorized_entries(
+                    categorize_entries_list, output_lines
+                )
                 categorize_entries_list.clear()
             section_state.update(
                 {
@@ -370,7 +374,9 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
             continue
 
         # Process commit lines in Changes or Fixed Issues sections FIRST
-        if (section_state["in_changes_section"] or section_state["in_fixed_issues"]) and COMMIT_BULLET_RE.match(line):
+        if (
+            section_state["in_changes_section"] or section_state["in_fixed_issues"]
+        ) and COMMIT_BULLET_RE.match(line):
             entry, next_index = _collect_commit_entry(lines, line_index)
             categorize_entries_list.append(entry)
             line_index = next_index
@@ -384,7 +390,9 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
         if is_release_end or (is_file_end and categorize_entries_list):
             # Process any pending entries only if we have them
             if categorize_entries_list:
-                process_and_output_categorized_entries(categorize_entries_list, output_lines)
+                process_and_output_categorized_entries(
+                    categorize_entries_list, output_lines
+                )
                 categorize_entries_list.clear()
 
             # Reset section state
@@ -423,7 +431,10 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
 def main() -> None:
     """Main function to process changelog entries."""
     if len(sys.argv) != 3:
-        print(f"Usage: {Path(sys.argv[0]).name} <input_changelog> <output_changelog>", file=sys.stderr)
+        print(
+            f"Usage: {Path(sys.argv[0]).name} <input_changelog> <output_changelog>",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     input_file = sys.argv[1]
