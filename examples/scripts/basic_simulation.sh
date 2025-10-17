@@ -1,6 +1,6 @@
 #!/bin/bash
 # Basic CDT simulation example script
-# This script demonstrates running a simple CDT simulation with the cdt-rs binary
+# This script demonstrates running a simple CDT simulation with the cdt binary
 
 set -e # Exit on any error
 
@@ -8,12 +8,12 @@ echo "=== Basic CDT Simulation Example ==="
 echo
 
 # Build the project in release mode for optimal performance
-echo "Building cdt-rs binary..."
+echo "Building cdt binary..."
 cargo build --release
 
 # Check if binary was built successfully
-if [ ! -f "./target/release/cdt-rs" ]; then
-	echo "Error: cdt-rs binary not found. Build may have failed."
+if [ ! -f "./target/release/cdt" ]; then
+	echo "Error: cdt binary not found. Build may have failed."
 	exit 1
 fi
 
@@ -25,7 +25,7 @@ echo "Running basic CDT simulation..."
 echo "Parameters: 10 vertices, 5 timeslices, 1000 MC steps"
 echo
 
-RUST_LOG=info ./target/release/cdt-rs \
+RUST_LOG=info ./target/release/cdt \
 	--vertices 10 \
 	--timeslices 5 \
 	--temperature 1.0 \

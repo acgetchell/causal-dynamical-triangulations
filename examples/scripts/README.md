@@ -1,6 +1,6 @@
 # CDT-RS CLI Example Scripts
 
-This directory contains shell scripts that demonstrate how to use the `cdt-rs` command-line binary for various simulation scenarios.
+This directory contains shell scripts that demonstrate how to use the `cdt` command-line binary for various simulation scenarios.
 
 ## Available Scripts
 
@@ -15,7 +15,7 @@ This directory contains shell scripts that demonstrate how to use the `cdt-rs` c
 
 **What it does**:
 
-- Builds the cdt-rs binary in release mode
+- Builds the cdt binary in release mode
 - Runs a basic simulation (10 vertices, 5 timeslices, 1000 MC steps)
 - Shows logging output and success confirmation
 
@@ -143,7 +143,7 @@ echo "=== Custom CDT Script ==="
 cargo build --release
 
 # Run simulation with custom parameters
-RUST_LOG=info ./target/release/cdt-rs \
+RUST_LOG=info ./target/release/cdt \
     --vertices 25 \
     --timeslices 10 \
     --temperature 1.5 \
@@ -269,4 +269,4 @@ Simulation logs contain:
 - [`examples/basic_cdt.rs`](../basic_cdt.rs): Library usage examples
 - [`benches/README.md`](../../benches/README.md): Benchmarking documentation
 
-These scripts provide a practical starting point for exploring CDT physics and conducting computational studies with the cdt-rs binary.
+These scripts provide a practical starting point for exploring CDT physics and conducting computational studies with the cdt binary.

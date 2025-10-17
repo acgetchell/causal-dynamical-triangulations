@@ -37,6 +37,7 @@ lcov.info
 # Performance testing data
 performance_baselines/
 performance_reports/
+sweep_results/
 
 # Temporary development files
 *_finder.rs

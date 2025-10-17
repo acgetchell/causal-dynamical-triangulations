@@ -1,6 +1,6 @@
 #!/bin/bash
 # Performance testing script for CDT simulations
-# This script benchmarks the cdt-rs binary performance across different system sizes
+# This script benchmarks the cdt binary performance across different system sizes
 
 set -e # Exit on any error
 
@@ -18,7 +18,7 @@ declare -a TEST_CONFIGS=(
 declare -a SIZE_NAMES=("Small" "Medium" "Large" "Extra Large")
 
 # Build optimized binary
-echo "Building optimized cdt-rs binary..."
+echo "Building optimized cdt binary..."
 cargo build --release
 
 echo "✓ Binary built successfully"
@@ -46,7 +46,7 @@ for i in "${!TEST_CONFIGS[@]}"; do
 	start_time=$(date +%s.%N)
 
 	# Run simulation with minimal logging to reduce I/O overhead
-	RUST_LOG=error ./target/release/cdt-rs \
+	RUST_LOG=error ./target/release/cdt \
 		--vertices "$vertices" \
 		--timeslices "$slices" \
 		--steps "$steps" \

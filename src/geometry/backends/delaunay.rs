@@ -213,7 +213,7 @@ where
         &self,
         vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::Coordinate>, Self::Error> {
-        use delaunay::geometry::traits::coordinate::Coordinate;
+        log::trace!("vertex_coordinates: searching for vertex {}", vertex.id);
 
         // Find the vertex in the Tds by UUID
         let v = self
@@ -224,9 +224,17 @@ where
             .map(|(_, v)| v)
             .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
 
+        log::trace!("vertex_coordinates: found vertex {}", vertex.id);
+
         // Extract coordinates from the point using the Coordinate trait
         let point = v.point();
-        Ok(point.to_array().to_vec())
+        let coords_vec: Vec<Self::Coordinate> = point.coords().iter().copied().collect();
+        log::debug!(
+            "vertex_coordinates: coords() returned {} values {:?}",
+            coords_vec.len(),
+            &coords_vec
+        );
+        Ok(coords_vec)
     }
 
     fn face_vertices(
@@ -243,10 +251,13 @@ where
             .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
 
         // Get vertices from the cell using the vertices() method
+        // Phase 3A: vertices() now returns VertexKeys, need to look up UUIDs via TDS
         let vertices = cell
             .vertices()
             .iter()
-            .map(|v| DelaunayVertexHandle { id: v.uuid() })
+            .map(|&vkey| DelaunayVertexHandle {
+                id: self.tds.vertices()[vkey].uuid(),
+            })
             .collect();
 
         Ok(vertices)
@@ -289,7 +300,12 @@ where
 
         for (_, cell) in self.tds.cells() {
             // Check if this cell contains the vertex by checking its vertices
-            if cell.vertices().iter().any(|v| v.uuid() == vertex.id) {
+            // Phase 3A: vertices() now returns VertexKeys, need to look up UUIDs via TDS
+            if cell
+                .vertices()
+                .iter()
+                .any(|&vkey| self.tds.vertices()[vkey].uuid() == vertex.id)
+            {
                 adjacent.push(DelaunayFaceHandle { id: cell.uuid() });
             }
         }
@@ -342,11 +358,13 @@ where
             .map(|(_, c)| c)
             .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
 
-        // Get neighbors from the cell's public neighbors field
+        // Get neighbors from the cell's neighbors() method
+        // Phase 3A: neighbors() now returns CellKeys, need to look up UUIDs via TDS
         let mut neighbors = Vec::new();
-        if let Some(neighbor_uuids) = &cell.neighbors {
-            for neighbor_uuid in neighbor_uuids.iter().flatten() {
-                neighbors.push(DelaunayFaceHandle { id: *neighbor_uuid });
+        if let Some(neighbor_keys) = cell.neighbors() {
+            for neighbor_key in neighbor_keys.iter().flatten() {
+                let neighbor_uuid = self.tds.cells()[*neighbor_key].uuid();
+                neighbors.push(DelaunayFaceHandle { id: neighbor_uuid });
             }
         }
 

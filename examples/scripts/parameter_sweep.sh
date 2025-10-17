@@ -18,7 +18,7 @@ OUTPUT_DIR="sweep_results"
 TEMPERATURES=(0.5 0.8 1.0 1.2 1.5 2.0 2.5 3.0)
 
 # Build the project
-echo "Building cdt-rs binary..."
+echo "Building cdt binary..."
 cargo build --release
 
 # Create output directory
@@ -38,7 +38,7 @@ for temp in "${TEMPERATURES[@]}"; do
 	output_file="${OUTPUT_DIR}/simulation_T${temp}.log"
 
 	# Run simulation and save output
-	RUST_LOG=info ./target/release/cdt-rs \
+	RUST_LOG=info ./target/release/cdt \
 		--vertices $VERTICES \
 		--timeslices $TIMESLICES \
 		--temperature "$temp" \

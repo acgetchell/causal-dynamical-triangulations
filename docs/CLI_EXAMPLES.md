@@ -1,19 +1,19 @@
 # CDT-RS Command Line Interface Examples
 
-This document provides examples for using the `cdt-rs` binary, the command-line interface for Causal Dynamical Triangulations simulations.
+This document provides examples for using the `cdt` binary, the command-line interface for Causal Dynamical Triangulations simulations.
 
 ## Basic Usage
 
-The `cdt-rs` binary accepts various command-line arguments to configure and run CDT simulations.
+The `cdt` binary accepts various command-line arguments to configure and run CDT simulations.
 
 ### Quick Start
 
 ```bash
 # Basic 2D CDT simulation with default parameters
-./target/release/cdt-rs --vertices 10 --timeslices 5
+./target/release/cdt --vertices 10 --timeslices 5
 
 # Run with custom temperature and steps
-./target/release/cdt-rs --vertices 20 --timeslices 10 --temperature 1.5 --steps 2000
+./target/release/cdt --vertices 20 --timeslices 10 --temperature 1.5 --steps 2000
 ```
 
 ## Command Line Arguments
@@ -47,7 +47,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # Quick test with minimal parameters
-./target/release/cdt-rs --vertices 5 --timeslices 2 --simulate
+./target/release/cdt --vertices 5 --timeslices 2 --simulate
 ```
 
 **Expected Output:**
@@ -60,7 +60,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # Medium triangulation for physics exploration  
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 50 \
   --timeslices 10 \
   --temperature 1.2 \
@@ -76,7 +76,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # High temperature (classical limit)
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 30 \
   --timeslices 8 \
   --temperature 10.0 \
@@ -90,7 +90,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # Low temperature (quantum regime)
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 25 \
   --timeslices 12 \
   --temperature 0.5 \
@@ -105,7 +105,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # Modified coupling constants
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 40 \
   --timeslices 8 \
   --coupling-0 0.8 \
@@ -120,7 +120,7 @@ The `cdt-rs` binary accepts various command-line arguments to configure and run 
 
 ```bash
 # Generate triangulation without simulation
-./target/release/cdt-rs --vertices 100 --timeslices 20
+./target/release/cdt --vertices 100 --timeslices 20
 ```
 
 **Use Case:** Generate initial configurations for other analysis tools
@@ -137,7 +137,7 @@ Create a script to run parameter sweeps:
 
 for temp in 0.5 1.0 1.5 2.0 2.5; do
     echo "Running simulation at temperature $temp"
-    ./target/release/cdt-rs \
+    ./target/release/cdt \
         --vertices 30 \
         --timeslices 10 \
         --temperature $temp \
@@ -151,7 +151,7 @@ done
 
 ```bash
 # Large simulation for performance testing
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 200 \
   --timeslices 25 \
   --steps 10000 \
@@ -165,13 +165,13 @@ Enable detailed logging:
 
 ```bash
 # Set log level for detailed output
-RUST_LOG=debug ./target/release/cdt-rs --vertices 10 --timeslices 5 --simulate
+RUST_LOG=debug ./target/release/cdt --vertices 10 --timeslices 5 --simulate
 
 # Log only errors and warnings
-RUST_LOG=warn ./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate
+RUST_LOG=warn ./target/release/cdt --vertices 50 --timeslices 10 --simulate
 
 # Save output to file
-./target/release/cdt-rs --vertices 25 --timeslices 8 --simulate > simulation.log 2>&1
+./target/release/cdt --vertices 25 --timeslices 8 --simulate > simulation.log 2>&1
 ```
 
 ## Expected Output Format
@@ -194,11 +194,11 @@ RUST_LOG=warn ./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate
 
 ```bash
 # Invalid parameters
-./target/release/cdt-rs --vertices 2 --timeslices 1
+./target/release/cdt --vertices 2 --timeslices 1
 # Error: vertices must be >= 3
 
 # Unsupported dimension
-./target/release/cdt-rs --vertices 10 --timeslices 5 --dimension 4
+./target/release/cdt --vertices 10 --timeslices 5 --dimension 4
 # Error: unsupported dimension
 ```
 
@@ -231,7 +231,7 @@ RUST_LOG=warn ./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate
 
    ```bash
    cargo build --release
-   ./target/release/cdt-rs --help
+   ./target/release/cdt --help
    ```
 
 2. **Insufficient memory**
@@ -253,7 +253,7 @@ RUST_LOG=warn ./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate
 
 ```bash
 # Pipe output to analysis tools
-./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate | \
+./target/release/cdt --vertices 50 --timeslices 10 --simulate | \
   python analysis_script.py
 ```
 
@@ -262,17 +262,17 @@ RUST_LOG=warn ./target/release/cdt-rs --vertices 50 --timeslices 10 --simulate
 ```bash
 # Use in makefiles or CI/CD
 make run-simulation: 
- ./target/release/cdt-rs --vertices $(VERTICES) --timeslices $(SLICES) --simulate
+ ./target/release/cdt --vertices $(VERTICES) --timeslices $(SLICES) --simulate
 ```
 
 ## Help and Documentation
 
 ```bash
 # Display all available options
-./target/release/cdt-rs --help
+./target/release/cdt --help
 
 # Version information  
-./target/release/cdt-rs --version
+./target/release/cdt --version
 ```
 
 This CLI interface provides a powerful way to explore CDT physics and test different simulation parameters efficiently from the command line.

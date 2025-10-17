@@ -17,9 +17,8 @@ use causal_dynamical_triangulations::{
     },
     geometry::{CdtTriangulation2D, traits::TriangulationQuery},
 };
-use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
-};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use std::hint::black_box;
 
 /// Benchmark triangulation creation with different vertex counts
 fn bench_triangulation_creation(c: &mut Criterion) {

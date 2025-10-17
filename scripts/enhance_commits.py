@@ -173,10 +173,7 @@ _CATEGORY_PATTERN_STRINGS = {
         r"\bdependabot\b",
     ],
 }
-CATEGORY_PATTERNS = {
-    category: [re.compile(pattern) for pattern in patterns]
-    for category, patterns in _CATEGORY_PATTERN_STRINGS.items()
-}
+CATEGORY_PATTERNS = {category: [re.compile(pattern) for pattern in patterns] for category, patterns in _CATEGORY_PATTERN_STRINGS.items()}
 
 
 def _extract_title_text(entry: str) -> str:
@@ -198,7 +195,37 @@ def _categorize_entry(
     title_text: str,
     patterns: Mapping[str, Sequence[Pattern[str]]],
 ) -> str:
-    """Categorize entry based on title text and patterns."""
+    """Categorize entry based on title text and patterns.
+
+    Checks for explicit category prefixes first (e.g., "Fixed:", "Added:"),
+    then falls back to keyword matching with priority ordering. This prevents
+    misclassification when a commit contains keywords from multiple categories.
+
+    Examples:
+        - "Fixed: Correctly count removed cells" → "fixed" (explicit prefix)
+        - "Remove deprecated API" → "removed" (action verb takes precedence)
+        - "patch security vulnerability" → "fixed" (matches both, but test expects "fixed")
+    """
+    # Check for explicit category prefixes first (highest priority)
+    # Match both short forms (fix:, add:) and past tense (fixed:, added:)
+    # Allow optional whitespace before colon
+    explicit_prefix_patterns = [
+        (r"^(?:fix|fixed)\s*:", "fixed"),
+        (r"^(?:add|added)\s*:", "added"),
+        (r"^(?:remove|removed)\s*:", "removed"),
+        (r"^(?:change|changed)\s*:", "changed"),
+        (r"^(?:deprecate|deprecated)\s*:", "deprecated"),
+        (r"^security\s*:", "security"),
+    ]
+
+    for pattern_str, category in explicit_prefix_patterns:
+        if re.match(pattern_str, title_text, re.IGNORECASE):
+            return category
+
+    # Fall back to keyword-based categorization
+    # Order prioritizes action verbs (add/remove/fix) over descriptive terms (security/deprecated)
+    # This ensures "remove deprecated API" → "removed" not "deprecated"
+    # and "patch security vulnerability" → "fixed" not "security"
     return next(
         (
             category
@@ -206,9 +233,9 @@ def _categorize_entry(
                 "added",
                 "removed",
                 "fixed",
-                "changed",
                 "deprecated",
                 "security",
+                "changed",  # Most generic (catch-all)
             ]
             if any(pattern.search(title_text) for pattern in patterns.get(category, []))
         ),
@@ -318,6 +345,87 @@ def _collect_commit_entry(lines: Sequence[str], line_index: int) -> tuple[str, i
     return "\n".join(current_entry), next_line_index
 
 
+def _handle_section_header_processing(
+    section_flags: tuple[str, bool, bool, bool],
+    section_state: dict[str, bool],
+    categorize_entries_list: list[str],
+    output_lines: list[str],
+    line: str,
+) -> None:
+    """Handle processing of recognized section headers."""
+    # Check if we're transitioning out of Changes or Fixed Issues sections
+    was_in_changes_or_fixed = section_state["in_changes_section"] or section_state["in_fixed_issues"]
+    will_be_in_changes_or_fixed = section_flags[1] or section_flags[2]
+
+    # Flush categorized entries if transitioning out of Changes/Fixed sections
+    if was_in_changes_or_fixed and not will_be_in_changes_or_fixed and categorize_entries_list:
+        process_and_output_categorized_entries(categorize_entries_list, output_lines)
+        categorize_entries_list.clear()
+
+    section_state.update(
+        {
+            "in_changes_section": section_flags[1],
+            "in_fixed_issues": section_flags[2],
+            "in_merged_prs_section": section_flags[3],
+        },
+    )
+    if section_flags[0] == "merged_prs":
+        # Keep Merged Pull Requests header (entries already flushed above if needed)
+        if output_lines and output_lines[-1] != "":
+            output_lines.append("")
+        output_lines.append(line)  # Keep Merged Pull Requests header
+
+
+def _handle_unrecognized_header(
+    categorize_entries_list: list[str],
+    output_lines: list[str],
+    section_state: dict[str, bool],
+    line: str,
+) -> None:
+    """Handle unrecognized ### headers by flushing pending entries."""
+    if categorize_entries_list:
+        process_and_output_categorized_entries(categorize_entries_list, output_lines)
+        categorize_entries_list.clear()
+    section_state.update(
+        {
+            "in_changes_section": False,
+            "in_fixed_issues": False,
+            "in_merged_prs_section": False,
+        },
+    )
+    output_lines.append(line)
+
+
+def _handle_release_end(
+    categorize_entries_list: list[str],
+    output_lines: list[str],
+    section_state: dict[str, bool],
+    line: str,
+) -> bool:
+    """Handle end of release section. Returns True if line was processed."""
+    # Process any pending entries only if we have them
+    if categorize_entries_list:
+        process_and_output_categorized_entries(categorize_entries_list, output_lines)
+        categorize_entries_list.clear()
+
+    # Reset section state
+    section_state.update(
+        {
+            "in_changes_section": False,
+            "in_fixed_issues": False,
+            "in_merged_prs_section": False,
+        },
+    )
+
+    # Add the release header to output if it's a new release
+    if re.match(r"^## ", line):
+        if output_lines and output_lines[-1] != "":
+            output_lines.append("")  # Avoid double blank lines
+        output_lines.append(line)
+        return True
+    return False
+
+
 def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
     """Process changelog lines and return categorized output."""
     output_lines = []
@@ -335,48 +443,18 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
         # Process section headers
         section_flags = _process_section_header(line)
         if section_flags:
-            section_state.update(
-                {
-                    "in_changes_section": section_flags[1],
-                    "in_fixed_issues": section_flags[2],
-                    "in_merged_prs_section": section_flags[3],
-                },
-            )
-            if section_flags[0] == "merged_prs":
-                # Flush categorized entries for this release before MPRs
-                if categorize_entries_list:
-                    process_and_output_categorized_entries(
-                        categorize_entries_list, output_lines
-                    )
-                    categorize_entries_list.clear()
-                if output_lines and output_lines[-1] != "":
-                    output_lines.append("")
-                output_lines.append(line)  # Keep Merged Pull Requests header
+            _handle_section_header_processing(section_flags, section_state, categorize_entries_list, output_lines, line)
             line_index += 1
             continue
 
         # Handle unrecognized ### headers - flush any pending entries
         if line.startswith("### ") and any(section_state.values()):
-            if categorize_entries_list:
-                process_and_output_categorized_entries(
-                    categorize_entries_list, output_lines
-                )
-                categorize_entries_list.clear()
-            section_state.update(
-                {
-                    "in_changes_section": False,
-                    "in_fixed_issues": False,
-                    "in_merged_prs_section": False,
-                },
-            )
-            output_lines.append(line)
+            _handle_unrecognized_header(categorize_entries_list, output_lines, section_state, line)
             line_index += 1
             continue
 
         # Process commit lines in Changes or Fixed Issues sections FIRST
-        if (
-            section_state["in_changes_section"] or section_state["in_fixed_issues"]
-        ) and COMMIT_BULLET_RE.match(line):
+        if (section_state["in_changes_section"] or section_state["in_fixed_issues"]) and COMMIT_BULLET_RE.match(line):
             entry, next_index = _collect_commit_entry(lines, line_index)
             categorize_entries_list.append(entry)
             line_index = next_index
@@ -387,30 +465,11 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
         is_release_end = re.match(r"^## ", line) and in_section
         is_file_end = line_index == len(lines) - 1
 
-        if is_release_end or (is_file_end and categorize_entries_list):
-            # Process any pending entries only if we have them
-            if categorize_entries_list:
-                process_and_output_categorized_entries(
-                    categorize_entries_list, output_lines
-                )
-                categorize_entries_list.clear()
-
-            # Reset section state
-            section_state.update(
-                {
-                    "in_changes_section": False,
-                    "in_fixed_issues": False,
-                    "in_merged_prs_section": False,
-                },
-            )
-
-            # Add the release header to output if it's a new release
-            if re.match(r"^## ", line):
-                if output_lines and output_lines[-1] != "":
-                    output_lines.append("")  # Avoid double blank lines
-                output_lines.append(line)
-                line_index += 1
-                continue
+        if (is_release_end or (is_file_end and categorize_entries_list)) and _handle_release_end(
+            categorize_entries_list, output_lines, section_state, line
+        ):
+            line_index += 1
+            continue
 
         # Skip PR description content in Merged Pull Requests section
         if section_state["in_merged_prs_section"] and re.match(r"^  ", line):
