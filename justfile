@@ -3,42 +3,70 @@
 # Install just: https://github.com/casey/just
 # Usage: just <command> or just --list
 
+# GitHub Actions workflow validation
 action-lint:
-    git ls-files -z '.github/workflows/*.yml' '.github/workflows/*.yaml' | xargs -0 -r actionlint
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '.github/workflows/*.yml' '.github/workflows/*.yaml')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 actionlint
+    else
+        echo "No workflow files found to lint."
+    fi
 
+# Benchmarks
 bench:
     cargo bench --workspace
 
 bench-compile:
     cargo bench --workspace --no-run
 
+# Build commands
 build:
     cargo build
 
 build-release:
     cargo build --release
 
-changelog-update:
-    uv run changelog-utils
+# Changelog management
+changelog:
+    uv run changelog-utils generate
 
+changelog-tag version:
+    uv run changelog-utils tag {{version}}
+
+changelog-update: changelog
+    @echo "📝 Changelog updated successfully!"
+    @echo "To create a git tag with changelog content for a specific version, run:"
+    @echo "  just changelog-tag <version>  # e.g., just changelog-tag v0.4.2"
+
+# CI simulation: quality checks + release tests + benchmark compilation + Kani fast
 ci: quality test-release bench-compile kani-fast
     @echo "🎯 CI simulation complete!"
 
+# CI with performance baseline
 ci-baseline tag="ci":
     just ci
     just perf-baseline {{tag}}
 
+# Clean build artifacts
 clean:
     cargo clean
     rm -rf target/tarpaulin
     rm -rf coverage_report
 
+# Code quality and formatting
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W clippy::cargo
 
+# Pre-commit workflow: quality + all tests (most comprehensive validation)
 commit-check: quality test-all
     @echo "🚀 Ready to commit! All checks passed."
 
+# Coverage analysis
 coverage:
     cargo tarpaulin --exclude-files 'benches/**' --exclude-files 'examples/**' --exclude-files 'tests/**' --out Html --output-dir target/tarpaulin
     @echo "📊 Coverage report generated: target/tarpaulin/tarpaulin-report.html"
@@ -46,53 +74,90 @@ coverage:
 coverage-report *args:
     uv run coverage_report {{args}}
 
+# Default recipe shows available commands
 default:
     @just --list
 
+# Development workflow: quick format, lint, and test cycle
 dev: fmt clippy test
     @echo "⚡ Quick development check complete!"
 
 doc-check:
-    RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
+    RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --document-private-items
 
 fmt:
     cargo fmt --all
 
 help-workflows:
     @echo "Common Just workflows:"
-    @echo "  just action-lint   # Lint all GitHub workflows with actionlint"
-    @echo "  just ci            # Simulate CI pipeline (requires Kani)"
-    @echo "  just ci-baseline   # CI + save performance baseline"
-    @echo "  just commit-check  # Full pre-commit checks"
-    @echo "  just coverage      # Generate coverage report"
     @echo "  just dev           # Quick development cycle (format, lint, test)"
+    @echo "  just quality       # All quality checks + tests (comprehensive)"
+    @echo "  just ci            # CI simulation (quality + release tests + bench compile + kani-fast)"
+    @echo "  just commit-check  # Pre-commit validation (quality + all tests) - most thorough"
+    @echo "  just ci-baseline   # CI + save performance baseline"
+    @echo ""
+    @echo "Testing:"
+    @echo "  just test          # Rust tests (debug mode)"
+    @echo "  just test-all      # All tests (Rust + CLI, debug mode)"
+    @echo "  just test-cli      # CLI integration tests"
+    @echo "  just test-release  # All tests in release mode"
+    @echo "  just coverage      # Generate coverage report"
+    @echo ""
+    @echo "Quality Check Groups:"
+    @echo "  just lint          # All linting (code + docs + config)"
+    @echo "  just lint-code     # Code linting (Rust, Python, Shell)"
+    @echo "  just lint-docs     # Documentation linting (Markdown, Spelling)"
+    @echo "  just lint-config   # Configuration validation (JSON, TOML, Actions)"
+    @echo ""
+    @echo "Formal Verification:"
     @echo "  just kani          # Run all Kani formal verification proofs"
     @echo "  just kani-fast     # Run fast Kani verification (ActionConfig only)"
-    @echo "  just python-lint   # Lint and format Python scripts with Ruff"
-    @echo "  just quality       # All quality checks"
-    @echo "  just run -- <args> # Run with custom arguments"
-    @echo "  just run-example   # Run with example arguments"
-    @echo "  just setup         # Set up development environment (includes Kani)"
-    @echo "  just test-all      # All tests"
     @echo ""
     @echo "Performance Analysis:"
     @echo "  just perf-help     # Show performance analysis commands"
     @echo "  just perf-check    # Check for performance regressions"
     @echo "  just perf-baseline # Save current performance as baseline"
     @echo ""
+    @echo "Running:"
+    @echo "  just run -- <args>  # Run with custom arguments"
+    @echo "  just run-example    # Run with example arguments"
+    @echo "  just run-simulation # Run basic_simulation.sh example script"
+    @echo ""
     @echo "Note: 'just ci' requires Kani verifier. Run 'just setup' for full environment."
-    @echo "Note: Some recipes require external tools (uv, actionlint, jq, etc.). See 'just setup' output."
+    @echo "Note: Some recipes require external tools. See 'just setup' output."
 
+# Kani formal verification
 kani:
     cargo kani
 
 kani-fast:
     cargo kani --harness verify_action_config
 
-lint: fmt clippy doc-check
+# Code linting: Rust (fmt, clippy, docs) + Python (ruff) + Shell scripts
+lint-code: fmt clippy doc-check python-lint shell-lint
 
+# Documentation linting: Markdown + spell checking
+lint-docs: markdown-lint spell-check
+
+# Configuration validation: JSON, TOML, GitHub Actions workflows
+lint-config: validate-json validate-toml action-lint
+
+# All linting: code + documentation + configuration
+lint: lint-code lint-docs lint-config
+
+# Shell and markdown quality
 markdown-lint:
-    git ls-files -z '*.md' | xargs -0 -r -n100 npx markdownlint --config .markdownlint.json --fix
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.md')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 -n100 npx markdownlint --config .markdownlint.json --fix
+    else
+        echo "No markdown files found to lint."
+    fi
 
 perf-baseline tag="":
     #!/usr/bin/env bash
@@ -139,34 +204,44 @@ perf-report file="":
 perf-trends days="7":
     uv run performance-analysis --trends {{days}}
 
+# Python code quality
 python-lint:
     uv run ruff check scripts/ --fix
     uv run ruff format scripts/
 
-quality: fmt clippy doc-check python-lint shell-lint markdown-lint spell-check validate-json validate-toml action-lint
-    @echo "✅ All quality checks passed!"
+# Comprehensive quality check: all linting + all tests
+quality: lint-code lint-docs lint-config test-all
+    @echo "✅ All quality checks and tests passed!"
 
+# Running the binary
 run *args:
-    cargo run --bin cdt-rs {{args}}
+    cargo run --bin cdt {{args}}
 
 run-example:
-    cargo run --bin cdt-rs -- -v 32 -t 3
+    cargo run --bin cdt -- -v 32 -t 3
 
 run-release *args:
-    cargo run --release --bin cdt-rs {{args}}
+    cargo run --release --bin cdt {{args}}
 
+# Run example simulation script
+run-simulation:
+    ./examples/scripts/basic_simulation.sh
+
+# Development setup
 setup:
-    @echo "Setting up development environment..."
+    @echo "Setting up causal-dynamical-triangulations development environment..."
     @echo "Note: Rust toolchain and components are managed by rust-toolchain.toml"
+    @echo ""
+    @echo "Installing Rust components..."
+    rustup component add clippy rustfmt rust-docs rust-src
     @echo ""
     @echo "Additional tools required (install separately):"
     @echo "  - uv: https://github.com/astral-sh/uv"
     @echo "  - actionlint: https://github.com/rhysd/actionlint"
-    @echo "  - shfmt, shellcheck: via package manager"
-    @echo "  - jq: via package manager"
+    @echo "  - shfmt, shellcheck: via package manager (brew install shfmt shellcheck)"
+    @echo "  - jq: via package manager (brew install jq)"
     @echo "  - Node.js (for npx/cspell): https://nodejs.org"
     @echo "  - cargo-tarpaulin: cargo install cargo-tarpaulin"
-    @echo "  - python-lint tooling: installed via 'uv sync --group dev'"
     @echo ""
     @echo "Installing Python tooling (ruff and related dependencies)..."
     uv sync --group dev
@@ -174,27 +249,51 @@ setup:
     @echo "Installing Kani verifier for formal verification (required for CI simulation)..."
     cargo install --locked kani-verifier
     cargo kani setup
+    @echo ""
     @echo "Building project..."
     cargo build
+    @echo "✅ Setup complete! Run 'just help-workflows' to see available commands."
 
 shell-lint:
-    git ls-files -z '*.sh' | xargs -0 -r -n1 shfmt -w
-    git ls-files -z '*.sh' | xargs -0 -r -n4 shellcheck -x
-    @# Note: justfiles are not shell scripts and are excluded from shellcheck
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.sh')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 -n1 shfmt -w
+        printf '%s\0' "${files[@]}" | xargs -0 -n4 shellcheck -x
+    else
+        echo "No shell files found to lint."
+    fi
+    # Note: justfiles are not shell scripts and are excluded from shellcheck
 
+# Spell checking with robust bash implementation
 spell-check:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	files=()
-	while IFS= read -r -d '' file; do
-		files+=("$file")
-	done < <(git diff --name-only -z HEAD)
-	if [ "${#files[@]}" -gt 0 ]; then
-		printf '%s\0' "${files[@]}" | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json
-	else
-		echo "No modified files to spell-check."
-	fi
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    # Use -z for NUL-delimited output to handle filenames with spaces
+    while IFS= read -r -d '' status_line; do
+        # Extract filename from git status --porcelain -z format
+        # Format: XY filename or XY oldname -> newname (for renames)
+        if [[ "$status_line" =~ ^..[[:space:]](.*)$ ]]; then
+            filename="${BASH_REMATCH[1]}"
+            # For renames (format: "old -> new"), take the new filename
+            if [[ "$filename" == *" -> "* ]]; then
+                filename="${filename#* -> }"
+            fi
+            files+=("$filename")
+        fi
+    done < <(git status --porcelain -z --ignored=no)
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json
+    else
+        echo "No modified files to spell-check."
+    fi
 
+# Testing
 test:
     cargo test --verbose
 
@@ -207,8 +306,29 @@ test-cli:
 test-release:
     cargo test --release
 
+# File validation
 validate-json:
-    git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.json')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 -n1 jq empty
+    else
+        echo "No JSON files found to validate."
+    fi
 
 validate-toml:
-    git ls-files -z '*.toml' | xargs -0 -r -I {} uv run python -c "import tomllib; tomllib.load(open('{}', 'rb')); print('{} is valid TOML')"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.toml')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 -I {} uv run python -c "import tomllib; tomllib.load(open('{}', 'rb')); print('{} is valid TOML')"
+    else
+        echo "No TOML files found to validate."
+    fi

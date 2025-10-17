@@ -9,7 +9,7 @@ use std::process::Command;
 
 #[test]
 fn exit_success() {
-    let mut cmd = Command::cargo_bin("cdt-rs").unwrap();
+    let mut cmd = Command::cargo_bin("cdt").unwrap();
     cmd.arg("-v");
     cmd.arg("32");
     cmd.arg("-t");
@@ -19,7 +19,7 @@ fn exit_success() {
 
 #[test]
 fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -36,7 +36,7 @@ fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn cdt_cli_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.assert().failure().stderr(predicate::str::contains(
         "error: the following required arguments were not provided:",
@@ -47,7 +47,7 @@ fn cdt_cli_no_args() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn cdt_cli_invalid_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -65,7 +65,7 @@ fn cdt_cli_invalid_args() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -85,7 +85,7 @@ fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
 fn cdt_cli_invalid_measurement_frequency_zero() -> Result<(), Box<dyn std::error::Error>> {
     // Note: This would be caught by clap's range validation now,
     // but we test the error message for completeness
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");
@@ -100,7 +100,7 @@ fn cdt_cli_invalid_measurement_frequency_zero() -> Result<(), Box<dyn std::error
 
 #[test]
 fn cdt_cli_invalid_measurement_frequency_too_large() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");
@@ -118,7 +118,7 @@ fn cdt_cli_invalid_measurement_frequency_too_large() -> Result<(), Box<dyn std::
 #[test]
 fn cdt_cli_invalid_vertices_too_few() -> Result<(), Box<dyn std::error::Error>> {
     // This should be caught by clap's range validation
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("--vertices").arg("2");
     cmd.arg("--timeslices").arg("3");
@@ -133,7 +133,7 @@ fn cdt_cli_invalid_vertices_too_few() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn cdt_cli_invalid_timeslices_zero() -> Result<(), Box<dyn std::error::Error>> {
     // This should be caught by clap's range validation
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("0");
@@ -148,7 +148,7 @@ fn cdt_cli_invalid_timeslices_zero() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn cdt_cli_config_validation_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     // Test a complex scenario with valid parameters to ensure our validation doesn't break normal usage
-    let mut cmd = Command::cargo_bin("cdt-rs")?;
+    let mut cmd = Command::cargo_bin("cdt")?;
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");

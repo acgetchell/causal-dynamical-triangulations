@@ -109,10 +109,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 cargo build --release
 
 # Run a basic simulation
-./target/release/cdt-rs --vertices 20 --timeslices 10 --steps 2000 --simulate
+./target/release/cdt --vertices 20 --timeslices 10 --steps 2000 --simulate
 
 # Parameter sweep for phase transition studies
-./target/release/cdt-rs \
+./target/release/cdt \
   --vertices 50 --timeslices 12 \
   --temperature 1.5 --coupling-0 0.8 \
   --steps 5000 --simulate
