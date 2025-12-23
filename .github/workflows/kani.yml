@@ -29,7 +29,7 @@ jobs:
           cache: true
 
       - name: Cache Kani artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target/kani
           key: ${{ runner.os }}-kani-fast-${{ hashFiles('Cargo.lock') }}
@@ -65,7 +65,7 @@ jobs:
           cache: true
 
       - name: Cache Kani artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target/kani
           key: ${{ runner.os }}-kani-${{ matrix.harness }}-${{ hashFiles('Cargo.lock') }}
