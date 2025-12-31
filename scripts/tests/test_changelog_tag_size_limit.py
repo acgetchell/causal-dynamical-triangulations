@@ -53,19 +53,20 @@ class TestTagSizeLimitHandling:
                 oversized_content = "\n\n".join([base_content] * repeats)
                 assert len(oversized_content.encode("utf-8")) > max_tag_size
 
+                repo_url = "https://github.com/example-owner/example-repo"
+                anchor = "test-anchor"
+
                 # Patch extraction so _get_changelog_content sees our oversized payload.
-                with patch.object(
-                    ChangelogUtils,
-                    "extract_changelog_section",
-                    return_value=oversized_content,
+                with (
+                    patch.object(ChangelogUtils, "get_repository_url", return_value=repo_url),
+                    patch.object(ChangelogUtils, "_extract_github_anchor", return_value=anchor),
+                    patch.object(ChangelogUtils, "extract_changelog_section", return_value=oversized_content),
                 ):
-                    tag_message, is_truncated = ChangelogUtils._get_changelog_content(  # noqa: SLF001
-                        "v0.5.4"
-                    )
+                    tag_message, is_truncated = ChangelogUtils._get_changelog_content("v0.5.4")  # noqa: SLF001
 
         assert is_truncated is True, "Large changelog should be truncated"
         assert "See full changelog" in tag_message, "Should contain CHANGELOG.md reference"
-        assert "github.com/acgetchell/causal-dynamical-triangulations" in tag_message, "Should contain GitHub link"
+        assert f"<{repo_url}/blob/v0.5.4/CHANGELOG.md#{anchor}>" in tag_message, "Should contain GitHub link to CHANGELOG.md"
         assert len(tag_message) < 1000, "Reference message should be short"
 
     def test_v0_5_3_changelog_within_limit(self):
@@ -134,7 +135,15 @@ class TestTagSizeLimitHandling:
             changelog_file = Path(tmp_dir) / "CHANGELOG.md"
             changelog_file.write_text(_TEST_CHANGELOG, encoding="utf-8")
 
-            with patch.object(ChangelogUtils, "find_changelog_path", return_value=str(changelog_file)), patch("builtins.print"):
+            with (
+                patch.object(ChangelogUtils, "find_changelog_path", return_value=str(changelog_file)),
+                patch.object(
+                    ChangelogUtils,
+                    "get_repository_url",
+                    return_value="https://github.com/example-owner/example-repo",
+                ),
+                patch("builtins.print"),
+            ):
                 exact_payload = make_ascii_payload(max_tag_size)
                 assert len(exact_payload.encode("utf-8")) == max_tag_size
 

@@ -155,7 +155,7 @@ class HardwareInfo:
                 elif "Socket(s):" in line:
                     sockets = int(line.split(":")[1].strip())
 
-            if cores_per_socket and sockets:
+            if cores_per_socket is not None and sockets is not None:
                 return str(cores_per_socket * sockets)
         except (subprocess.CalledProcessError, ValueError, IndexError):
             pass
@@ -209,6 +209,27 @@ class HardwareInfo:
         except subprocess.CalledProcessError:
             return "Unknown", "Unknown", "Unknown"
 
+    def _run_powershell_command(self, ps_cmd: str, command: str) -> str:
+        """
+        Run a PowerShell command and return output.
+
+        Args:
+            ps_cmd: PowerShell executable to use
+            command: PowerShell command string to execute
+
+        Returns:
+            Command output
+        """
+        return self._run_command(
+            [
+                ps_cmd,
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                command,
+            ],
+        ).strip()
+
     def _get_windows_cpu_model(self, ps_cmd: str) -> str:
         """
         Get CPU model on Windows.
@@ -219,9 +240,10 @@ class HardwareInfo:
         Returns:
             CPU model name
         """
-        return self._run_command(
-            [ps_cmd, "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).Name"],
-        ).strip()
+        return self._run_powershell_command(
+            ps_cmd,
+            "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).Name",
+        )
 
     def _get_windows_cpu_cores(self, ps_cmd: str) -> str:
         """
@@ -233,15 +255,10 @@ class HardwareInfo:
         Returns:
             CPU core count
         """
-        return self._run_command(
-            [
-                ps_cmd,
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).NumberOfCores",
-            ],
-        ).strip()
+        return self._run_powershell_command(
+            ps_cmd,
+            "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).NumberOfCores",
+        )
 
     def _get_windows_cpu_threads(self, ps_cmd: str) -> str:
         """
@@ -253,15 +270,10 @@ class HardwareInfo:
         Returns:
             CPU thread count
         """
-        return self._run_command(
-            [
-                ps_cmd,
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).NumberOfLogicalProcessors",
-            ],
-        ).strip()
+        return self._run_powershell_command(
+            ps_cmd,
+            "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).NumberOfLogicalProcessors",
+        )
 
     def get_memory_info(self) -> str:
         """
@@ -294,18 +306,13 @@ class HardwareInfo:
                 ps_cmd = "pwsh" if shutil.which("pwsh") else "powershell"
                 if shutil.which(ps_cmd):
                     try:
-                        return self._run_command(
-                            [
-                                ps_cmd,
-                                "-NoProfile",
-                                "-NonInteractive",
-                                "-Command",
-                                "try { "
-                                "$mem_bytes = [math]::Round((Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory); "
-                                '$mem_gb = [math]::Round($mem_bytes / 1GB, 1); Write-Output "$mem_gb GB" '
-                                '} catch { Write-Output "Unknown" }',
-                            ],
-                        ).strip()
+                        ps_mem_cmd = (
+                            "try { "
+                            "$mem_bytes = [math]::Round((Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory); "
+                            '$mem_gb = [math]::Round($mem_bytes / 1GB, 1); Write-Output "$mem_gb GB" '
+                            '} catch { Write-Output "Unknown" }'
+                        )
+                        return self._run_powershell_command(ps_cmd, ps_mem_cmd)
                     except subprocess.CalledProcessError:
                         pass
 
@@ -504,61 +511,107 @@ class HardwareComparator:
             "Hardware Compatibility:",
         ]
 
-        warnings_found = False
+        warnings: list[str] = []
 
-        # Check for significant differences
-        if current_info["OS"] != baseline_info["OS"] and baseline_info["OS"] != "Unknown":
-            report_lines.append(f"⚠️  OS differs: {current_info['OS']} vs {baseline_info['OS']}")
-            warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["OS"],
+            baseline=baseline_info["OS"],
+            message=f"⚠️  OS differs: {current_info['OS']} vs {baseline_info['OS']}",
+        )
 
-        if current_info["CPU"] != baseline_info["CPU"] and baseline_info["CPU"] != "Unknown":
-            report_lines.append(f"⚠️  CPU differs: '{current_info['CPU']}' vs '{baseline_info['CPU']}' — results may not be directly comparable")
-            warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["CPU"],
+            baseline=baseline_info["CPU"],
+            message=(f"⚠️  CPU differs: '{current_info['CPU']}' vs '{baseline_info['CPU']}' — results may not be directly comparable"),
+        )
 
-        if (
-            current_info["CPU_CORES"] != baseline_info["CPU_CORES"]
-            and baseline_info["CPU_CORES"] != "Unknown"
-            and current_info["CPU_CORES"] != "Unknown"
-        ):
-            report_lines.append(f"⚠️  CPU core count differs: {current_info['CPU_CORES']} vs {baseline_info['CPU_CORES']} cores")
-            warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["CPU_CORES"],
+            baseline=baseline_info["CPU_CORES"],
+            message=(f"⚠️  CPU core count differs: {current_info['CPU_CORES']} vs {baseline_info['CPU_CORES']} cores"),
+            skip_if_current_unknown=True,
+        )
 
-        if (
-            current_info["CPU_THREADS"] != baseline_info["CPU_THREADS"]
-            and baseline_info["CPU_THREADS"] != "Unknown"
-            and current_info["CPU_THREADS"] != "Unknown"
-        ):
-            report_lines.append(f"⚠️  CPU thread count differs: {current_info['CPU_THREADS']} vs {baseline_info['CPU_THREADS']} threads")
-            warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["CPU_THREADS"],
+            baseline=baseline_info["CPU_THREADS"],
+            message=(f"⚠️  CPU thread count differs: {current_info['CPU_THREADS']} vs {baseline_info['CPU_THREADS']} threads"),
+            skip_if_current_unknown=True,
+        )
 
-        # Memory comparison with numeric tolerance
-        if baseline_info["MEMORY"] != "Unknown" and current_info["MEMORY"] != "Unknown":
-            current_mem_num = HardwareComparator._extract_memory_value(current_info["MEMORY"])
-            baseline_mem_num = HardwareComparator._extract_memory_value(baseline_info["MEMORY"])
+        memory_warning = HardwareComparator._memory_warning_message(
+            current=current_info["MEMORY"],
+            baseline=baseline_info["MEMORY"],
+        )
+        if memory_warning is not None:
+            warnings.append(memory_warning)
 
-            if current_mem_num is not None and baseline_mem_num is not None:
-                mem_diff = abs(current_mem_num - baseline_mem_num)
-                if mem_diff > 0.1:  # More than 0.1 GB difference
-                    report_lines.append(f"⚠️  Memory differs: {current_info['MEMORY']} vs {baseline_info['MEMORY']}")
-                    warnings_found = True
-            elif current_info["MEMORY"] != baseline_info["MEMORY"]:
-                report_lines.append(f"⚠️  Memory differs: {current_info['MEMORY']} vs {baseline_info['MEMORY']}")
-                warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["RUST"],
+            baseline=baseline_info["RUST"],
+            message=(f"⚠️  Rust version differs: '{current_info['RUST']}' vs '{baseline_info['RUST']}' — performance may be affected"),
+        )
 
-        if current_info["RUST"] != baseline_info["RUST"] and baseline_info["RUST"] != "Unknown":
-            report_lines.append(f"⚠️  Rust version differs: '{current_info['RUST']}' vs '{baseline_info['RUST']}' — performance may be affected")
-            warnings_found = True
+        HardwareComparator._warn_if_different(
+            warnings,
+            current=current_info["TARGET"],
+            baseline=baseline_info["TARGET"],
+            message=f"⚠️  Target architecture differs: {current_info['TARGET']} vs {baseline_info['TARGET']}",
+        )
 
-        if current_info["TARGET"] != baseline_info["TARGET"] and baseline_info["TARGET"] != "Unknown":
-            report_lines.append(f"⚠️  Target architecture differs: {current_info['TARGET']} vs {baseline_info['TARGET']}")
-            warnings_found = True
-
-        if not warnings_found:
+        if warnings:
+            report_lines.extend(warnings)
+        else:
             report_lines.append("✅ Hardware configurations are compatible for comparison")
 
         report_lines.append("")
 
-        return "\n".join(report_lines), warnings_found
+        return "\n".join(report_lines), bool(warnings)
+
+    @staticmethod
+    def _warn_if_different(
+        warnings: list[str],
+        *,
+        current: str,
+        baseline: str,
+        message: str,
+        skip_if_current_unknown: bool = False,
+    ) -> None:
+        if baseline == "Unknown":
+            return
+        if skip_if_current_unknown and current == "Unknown":
+            return
+        if current != baseline:
+            warnings.append(message)
+
+    @staticmethod
+    def _memory_warning_message(*, current: str, baseline: str) -> str | None:
+        warning: str | None = None
+
+        if current != "Unknown" and baseline != "Unknown":
+            current_mem_num = HardwareComparator._extract_memory_value(current)
+            baseline_mem_num = HardwareComparator._extract_memory_value(baseline)
+
+            if current_mem_num is not None and baseline_mem_num is not None:
+                # Percentage-based tolerance is more robust across small and large memory systems.
+                # Guard against division by zero if baseline parsing returns 0.
+                if baseline_mem_num <= 0:
+                    mem_diff = abs(current_mem_num - baseline_mem_num)
+                    if mem_diff > 0.1:
+                        warning = f"⚠️  Memory differs: {current} vs {baseline}"
+                else:
+                    mem_diff_pct = abs(current_mem_num - baseline_mem_num) / baseline_mem_num * 100
+                    if mem_diff_pct > 2.0:  # More than 2% difference
+                        warning = f"⚠️  Memory differs: {current} vs {baseline}"
+            elif current != baseline:
+                warning = f"⚠️  Memory differs: {current} vs {baseline}"
+
+        return warning
 
     @staticmethod
     def _extract_memory_value(memory_str: str) -> float | None:

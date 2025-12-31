@@ -205,7 +205,7 @@ ignore_missing_imports = true
 
 # Allow tests to be less strict
 [[tool.mypy.overrides]]
-module = "scripts.tests.*"
+module = "tests.*"
 ignore_errors = true
 
 [dependency-groups]

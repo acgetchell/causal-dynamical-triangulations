@@ -39,11 +39,6 @@ class CriterionEstimate(TypedDict):
     mean_ci_upper: NotRequired[float]
 
 
-# BaselineEntry for single value
-class BaselineEntry(TypedDict):
-    mean_ns: float
-
-
 class NewBenchmark(TypedDict):
     benchmark: str
     mean_ns: float
@@ -166,7 +161,7 @@ class PerformanceAnalyzer:
             if estimates_file.parent.name not in {"new", "base"}:
                 continue
             try:
-                with open(estimates_file) as f:
+                with open(estimates_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Build benchmark name from path structure
@@ -200,7 +195,7 @@ class PerformanceAnalyzer:
         filename = f"baseline_{tag}_{timestamp}.json" if tag else f"baseline_{timestamp}.json"
 
         baseline_file = self.baseline_dir / filename
-        with open(baseline_file, "w") as f:
+        with open(baseline_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
 
         # Update latest symlink (with Windows fallback)
@@ -228,7 +223,7 @@ class PerformanceAnalyzer:
             return {}
 
         try:
-            with open(baseline_path) as f:
+            with open(baseline_path, encoding="utf-8") as f:
                 data: object = json.load(f)
             if isinstance(data, dict):
                 return cast("dict[str, CriterionEstimate]", data)
@@ -460,7 +455,7 @@ class PerformanceAnalyzer:
         report_content = "\n".join(lines)
 
         if output_file:
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(report_content)
             print(f"📄 Report saved to: {output_file}")
 

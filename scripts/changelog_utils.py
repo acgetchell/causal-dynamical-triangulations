@@ -38,6 +38,9 @@ COLOR_BLUE = "\033[0;34m"
 COLOR_YELLOW = "\033[1;33m"
 COLOR_RESET = "\033[0m"
 
+# GitHub's maximum size for git tag annotations (bytes)
+_GITHUB_TAG_ANNOTATION_LIMIT = 125_000
+
 
 class ChangelogError(Exception):
     """Base exception for changelog operations."""
@@ -941,7 +944,7 @@ class ChangelogUtils:
             - is_truncated: True if content was truncated due to size limit
         """
         # GitHub's git tag annotation limit
-        MAX_TAG_SIZE = 125000  # 125KB
+        MAX_TAG_SIZE = _GITHUB_TAG_ANNOTATION_LIMIT
 
         changelog_path = ChangelogUtils.find_changelog_path()
         version = ChangelogUtils.parse_version(tag_version)
@@ -957,10 +960,18 @@ class ChangelogUtils:
             # Create short message referencing CHANGELOG.md
             # Extract date from changelog heading to build proper GitHub anchor
             anchor = ChangelogUtils._extract_github_anchor(changelog_path, version)
+
+            try:
+                repo_url = ChangelogUtils.get_repository_url()
+            except GitRepoError:
+                # Fallback: keep a stable link for this repository even when running in a
+                # minimal test environment without a configured `origin` remote.
+                repo_url = "https://github.com/acgetchell/causal-dynamical-triangulations"
+
             short_message = f"""Version {version}
 
 This release contains extensive changes. See full changelog:
-<https://github.com/acgetchell/causal-dynamical-triangulations/blob/{tag_version}/CHANGELOG.md#{anchor}>
+<{repo_url}/blob/{tag_version}/CHANGELOG.md#{anchor}>
 
 For detailed release notes, refer to CHANGELOG.md in the repository.
 """
@@ -1411,6 +1422,20 @@ _RN_META_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Project-specific breaking-change heuristics (overridable for reuse).
+#
+# These are literal tokens (not regex) matched with word boundaries. If you want to
+# reuse this module in another project, override them with:
+#   CHANGELOG_BREAKING_API_TOKENS="token1,token2"
+_BREAKING_API_TOKENS_ENV = "CHANGELOG_BREAKING_API_TOKENS"
+_DEFAULT_BREAKING_API_TOKENS = (
+    "insert_with_statistics",
+    "insert_transactional",
+)
+_BREAKING_API_TOKENS: tuple[str, ...] = tuple(
+    token.strip() for token in os.environ.get(_BREAKING_API_TOKENS_ENV, ",".join(_DEFAULT_BREAKING_API_TOKENS)).split(",") if token.strip()
+)
+
 
 def _rn_skip_blank_lines(lines: list[str], start: int) -> int:
     i = start
@@ -1556,8 +1581,8 @@ class _BreakingChangeDetector:
             re.IGNORECASE,
         ),
         # Project-specific known breaking API touchpoints.
-        re.compile(r"\binsert_with_statistics\b", re.IGNORECASE),
-        re.compile(r"\binsert_transactional\b", re.IGNORECASE),
+        # Controlled via CHANGELOG_BREAKING_API_TOKENS (comma-separated literal tokens).
+        *(re.compile(rf"\b{re.escape(token)}\b", re.IGNORECASE) for token in _BREAKING_API_TOKENS),
     )
 
     @classmethod

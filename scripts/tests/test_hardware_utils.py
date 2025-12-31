@@ -469,7 +469,7 @@ Other content here...
         assert "CPU core count differs: 8 vs 6 cores" in report
 
     def test_compare_hardware_memory_tolerance(self):
-        """Test memory comparison with numeric tolerance."""
+        """Test memory comparison with numeric (percentage-based) tolerance."""
         current_info = {
             "OS": "Linux",
             "CPU": "Intel i7",
@@ -480,15 +480,15 @@ Other content here...
             "TARGET": "x86_64-unknown-linux-gnu",
         }
 
-        # Test within tolerance (0.05 GB difference)
+        # Test within tolerance (~0.3% difference)
         baseline_info = current_info.copy()
         baseline_info["MEMORY"] = "15.95 GB"
 
         report, has_warnings = HardwareComparator.compare_hardware(current_info, baseline_info)
         assert not has_warnings
 
-        # Test outside tolerance (0.2 GB difference)
-        baseline_info["MEMORY"] = "15.8 GB"
+        # Test outside tolerance (>2% difference)
+        baseline_info["MEMORY"] = "15.6 GB"
 
         report, has_warnings = HardwareComparator.compare_hardware(current_info, baseline_info)
         assert has_warnings
