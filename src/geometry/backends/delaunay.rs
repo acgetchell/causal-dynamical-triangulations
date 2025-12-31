@@ -239,6 +239,17 @@ where
         *self.edge_cache.borrow_mut() = Some(Arc::clone(&cache));
         cache
     }
+
+    /// Invalidate the lazily-built topology cache for expensive edge queries.
+    ///
+    /// Call this after any operation that changes triangulation topology (e.g. inserting/removing
+    /// vertices, flipping edges, subdividing faces, or clearing the triangulation). If an operation
+    /// only changes vertex coordinates without changing connectivity, invalidation is not required.
+    #[allow(dead_code)]
+    #[inline]
+    fn invalidate_edge_cache(&self) {
+        *self.edge_cache.borrow_mut() = None;
+    }
 }
 
 impl<VertexData, CellData, const D: usize> GeometryBackend
@@ -492,7 +503,9 @@ where
         &mut self,
         _coords: &[Self::Coordinate],
     ) -> Result<Self::VertexHandle, Self::Error> {
-        // TODO: Implement vertex insertion
+        // TODO: Implement vertex insertion.
+        // IMPORTANT: This is a topology mutation; call self.invalidate_edge_cache() after any
+        // successful insertion that changes adjacency/connectivity.
         Err(DelaunayError::OperationFailed(
             "Not implemented".to_string(),
         ))
@@ -502,7 +515,9 @@ where
         &mut self,
         _vertex: Self::VertexHandle,
     ) -> Result<Vec<Self::FaceHandle>, Self::Error> {
-        // TODO: Implement vertex removal
+        // TODO: Implement vertex removal.
+        // IMPORTANT: This is a topology mutation; call self.invalidate_edge_cache() after any
+        // successful removal that changes adjacency/connectivity.
         Err(DelaunayError::OperationFailed(
             "Not implemented".to_string(),
         ))
@@ -513,7 +528,9 @@ where
         _vertex: Self::VertexHandle,
         _new_coords: &[Self::Coordinate],
     ) -> Result<(), Self::Error> {
-        // TODO: Implement vertex movement
+        // TODO: Implement vertex movement.
+        // NOTE: If movement triggers re-triangulation (topology changes), call
+        // self.invalidate_edge_cache().
         Err(DelaunayError::OperationFailed(
             "Not implemented".to_string(),
         ))
@@ -524,14 +541,16 @@ where
         _edge: Self::EdgeHandle,
     ) -> Result<FlipResult<Self::VertexHandle, Self::EdgeHandle, Self::FaceHandle>, Self::Error>
     {
-        // TODO: Implement edge flip
+        // TODO: Implement edge flip.
+        // IMPORTANT: This is a topology mutation; call self.invalidate_edge_cache() after a
+        // successful flip.
         Err(DelaunayError::OperationFailed(
             "Not implemented".to_string(),
         ))
     }
 
     fn can_flip_edge(&self, _edge: &Self::EdgeHandle) -> bool {
-        // TODO: Implement flip check
+        // TODO: Implement flip feasibility check (read-only; does not invalidate caches).
         false
     }
 
@@ -543,18 +562,24 @@ where
         SubdivisionResult<Self::VertexHandle, Self::EdgeHandle, Self::FaceHandle>,
         Self::Error,
     > {
-        // TODO: Implement face subdivision
+        // TODO: Implement face subdivision.
+        // IMPORTANT: This is a topology mutation; call self.invalidate_edge_cache() after a
+        // successful subdivision.
         Err(DelaunayError::OperationFailed(
             "Not implemented".to_string(),
         ))
     }
 
     fn clear(&mut self) {
-        // TODO: Implement clear operation
+        // TODO: Implement clear operation.
+        // IMPORTANT: Clearing changes topology; call self.invalidate_edge_cache().
     }
 
     fn reserve_capacity(&mut self, _vertices: usize, _faces: usize) {
-        // TODO: Implement capacity reservation
+        // TODO: Implement capacity reservation.
+        // NOTE: Reserving capacity should not change topology, so cache invalidation is not
+        // expected. If the implementation replaces/rebuilds the triangulation, call
+        // self.invalidate_edge_cache().
     }
 }
 

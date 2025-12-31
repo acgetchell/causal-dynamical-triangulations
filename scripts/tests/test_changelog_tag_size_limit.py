@@ -88,6 +88,71 @@ class TestTagSizeLimitHandling:
         assert is_truncated is False, "Small changelog should not be truncated"
         assert tag_message == content, "Should return full content when under limit"
 
+    def test_changelog_at_125kb_boundary_behavior(self):
+        """Verify edge behavior right at the 125KB tag-message limit.
+
+        `_get_changelog_content()` truncates only when `content_size > MAX_TAG_SIZE`, so
+        content that is exactly 125,000 bytes should *not* be truncated.
+        """
+        max_tag_size = 125000
+
+        def make_ascii_payload(target_bytes: int, line_len: int = 80) -> str:
+            """Create deterministic ASCII payload of exactly `target_bytes` bytes when UTF-8 encoded.
+
+            Inserts newlines so `_get_changelog_content()` preview output stays reasonably small.
+            """
+            if target_bytes < 0:
+                msg = "target_bytes must be non-negative"
+                raise ValueError(msg)
+
+            parts: list[str] = []
+            remaining = target_bytes
+
+            while remaining > 0:
+                chunk_len = min(line_len, remaining)
+                parts.append("a" * chunk_len)
+                remaining -= chunk_len
+
+                if remaining <= 0:
+                    break
+
+                # If we only have 1 byte left, use content rather than a newline so the
+                # payload doesn't end with a trailing separator.
+                if remaining == 1:
+                    parts.append("a")
+                    remaining -= 1
+                    break
+
+                parts.append("\n")
+                remaining -= 1
+
+            payload = "".join(parts)
+            assert len(payload.encode("utf-8")) == target_bytes
+            return payload
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            changelog_file = Path(tmp_dir) / "CHANGELOG.md"
+            changelog_file.write_text(_TEST_CHANGELOG, encoding="utf-8")
+
+            with patch.object(ChangelogUtils, "find_changelog_path", return_value=str(changelog_file)), patch("builtins.print"):
+                exact_payload = make_ascii_payload(max_tag_size)
+                assert len(exact_payload.encode("utf-8")) == max_tag_size
+
+                with patch.object(ChangelogUtils, "extract_changelog_section", return_value=exact_payload):
+                    exact_message, exact_truncated = ChangelogUtils._get_changelog_content("v0.5.4")  # noqa: SLF001
+
+                over_payload = make_ascii_payload(max_tag_size + 1)
+                assert len(over_payload.encode("utf-8")) == max_tag_size + 1
+
+                with patch.object(ChangelogUtils, "extract_changelog_section", return_value=over_payload):
+                    over_message, over_truncated = ChangelogUtils._get_changelog_content("v0.5.4")  # noqa: SLF001
+
+        assert exact_truncated is False, "Content exactly at the limit should not be truncated"
+        assert exact_message == exact_payload, "Should return full content at the exact size limit"
+
+        assert over_truncated is True, "Content just over the limit should be truncated"
+        assert "See full changelog" in over_message, "Truncated path should return CHANGELOG.md reference message"
+
     @patch("changelog_utils.run_git_command_with_input")
     def test_create_tag_with_message_truncated(self, mock_run_git_with_input):
         """Test annotated tag with reference message for oversized changelogs."""

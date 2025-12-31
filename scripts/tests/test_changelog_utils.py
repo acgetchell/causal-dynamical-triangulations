@@ -6,16 +6,19 @@ error handling, and changelog generation workflows.
 """
 
 import json
-
-# Import the module under test
-import sys
 from pathlib import Path
 from unittest.mock import mock_open, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
-from changelog_utils import ChangelogError, ChangelogNotFoundError, ChangelogProcessor, ChangelogUtils, GitRepoError, VersionError
+from changelog_utils import (
+    ChangelogError,
+    ChangelogNotFoundError,
+    ChangelogProcessor,
+    ChangelogUtils,
+    GitRepoError,
+    VersionError,
+)
 from subprocess_utils import run_git_command
 
 

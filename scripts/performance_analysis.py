@@ -550,7 +550,7 @@ class PerformanceAnalyzer:
             "data_points": n,
             "first_value": values[0],
             "last_value": values[-1],
-            "change_percent": (((values[-1] - values[0]) / values[0]) * 100 if abs(values[0]) > epsilon else 0),
+            "change_percent": (((values[-1] - values[0]) / values[0]) * 100 if abs(values[0]) > epsilon else 0.0),
         }
 
     def analyze_trends(self, days: int = 30) -> TrendAnalysisResult:

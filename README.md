@@ -75,7 +75,7 @@ how to install them.
 - `just fix` - Apply formatters/auto-fixes (mutating)
 - `just check` - Run linters/validators (non-mutating)
 - `just dev` - Quick development cycle (fix + clippy + tests)
-- `just ci` - CI parity (mirrors `.github/workflows/ci.yml`)
+- `just ci` - CI parity (mirrors GitHub Actions workflow [`ci.yml`](.github/workflows/ci.yml))
 - `just commit-check` - Comprehensive pre-commit validation (includes Kani)
 
 **Repository tooling (via `just`):**

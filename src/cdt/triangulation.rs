@@ -711,10 +711,7 @@ mod tests {
             .expect("Failed to create triangulation with fixed seed");
 
         let result = triangulation.geometry().is_valid();
-        assert!(
-            result,
-            "Validation should succeed for closed triangulation: {result:?}"
-        );
+        assert!(result, "Validation should succeed for closed triangulation");
     }
 
     #[test]

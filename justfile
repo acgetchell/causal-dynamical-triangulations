@@ -26,14 +26,13 @@ _ensure-shellcheck:
 _ensure-shfmt:
     command -v shfmt >/dev/null || { echo "❌ 'shfmt' not found. See 'just setup' or https://github.com/mvdan/sh"; exit 1; }
 
+_ensure-actionlint:
+    command -v actionlint >/dev/null || { echo "❌ 'actionlint' not found. See 'just setup' or https://github.com/rhysd/actionlint"; exit 1; }
+
 # GitHub Actions workflow validation
-action-lint:
+action-lint: _ensure-actionlint
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v actionlint >/dev/null; then
-        echo "⚠️ 'actionlint' not found. See 'just setup' or https://github.com/rhysd/actionlint"
-        exit 0
-    fi
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")

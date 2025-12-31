@@ -56,7 +56,12 @@ class HardwareInfo:
             if self.os_type == "Windows":
                 return self._get_cpu_info_windows()
         except Exception as e:
-            logger.debug("Failed to get CPU info for OS %s: %s", self.os_type, e)
+            logger.debug(
+                "Failed to get CPU info for OS %s: %s (%s)",
+                self.os_type,
+                e,
+                type(e).__name__,
+            )
 
         return "Unknown", "Unknown", "Unknown"
 
