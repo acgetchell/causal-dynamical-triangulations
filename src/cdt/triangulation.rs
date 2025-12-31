@@ -710,9 +710,9 @@ mod tests {
         let triangulation = CdtTriangulation::from_seeded_points(5, 2, 2, TRIANGULATION_SEED)
             .expect("Failed to create triangulation with fixed seed");
 
-        let result = triangulation.geometry().triangulation().is_valid();
+        let result = triangulation.geometry().is_valid();
         assert!(
-            result.is_ok(),
+            result,
             "Validation should succeed for closed triangulation: {result:?}"
         );
     }

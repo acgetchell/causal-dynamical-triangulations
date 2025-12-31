@@ -24,6 +24,7 @@ from pathlib import Path
 
 # NOTE: Use copy2 (metadata-preserving) under the 'copyfile' alias for tests/patching convenience.
 from shutil import copy2 as copyfile
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from packaging.version import Version
@@ -32,40 +33,57 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_REGRESSION_THRESHOLD = 7.5
 
-try:
-    # When executed as a script from scripts/
-    from benchmark_models import (  # type: ignore[no-redef,import-not-found]
+if TYPE_CHECKING:
+    from benchmark_models import (
         BenchmarkData,
         CircumspherePerformanceData,
         CircumsphereTestCase,
         extract_benchmark_data,
         format_benchmark_tables,
     )
-    from hardware_utils import HardwareComparator, HardwareInfo  # type: ignore[no-redef,import-not-found]
-    from subprocess_utils import (  # type: ignore[no-redef,import-not-found]
+    from hardware_utils import HardwareComparator, HardwareInfo
+    from subprocess_utils import (
         ProjectRootNotFoundError,
         find_project_root,
         get_git_commit_hash,
         run_cargo_command,
         run_git_command,
     )
-except ModuleNotFoundError:
-    # When imported as a module (e.g., scripts.benchmark_utils)
-    from scripts.benchmark_models import (  # type: ignore[no-redef,import-not-found]
-        BenchmarkData,
-        CircumspherePerformanceData,
-        CircumsphereTestCase,
-        extract_benchmark_data,
-        format_benchmark_tables,
-    )
-    from scripts.hardware_utils import HardwareComparator, HardwareInfo  # type: ignore[no-redef,import-not-found]
-    from scripts.subprocess_utils import (  # type: ignore[no-redef,import-not-found]
-        ProjectRootNotFoundError,
-        find_project_root,
-        get_git_commit_hash,
-        run_cargo_command,
-        run_git_command,
-    )
+else:
+    try:
+        # When executed as a script from scripts/
+        from benchmark_models import (
+            BenchmarkData,
+            CircumspherePerformanceData,
+            CircumsphereTestCase,
+            extract_benchmark_data,
+            format_benchmark_tables,
+        )
+        from hardware_utils import HardwareComparator, HardwareInfo
+        from subprocess_utils import (
+            ProjectRootNotFoundError,
+            find_project_root,
+            get_git_commit_hash,
+            run_cargo_command,
+            run_git_command,
+        )
+    except ModuleNotFoundError:
+        # When imported as a module (e.g., scripts.benchmark_utils)
+        from scripts.benchmark_models import (
+            BenchmarkData,
+            CircumspherePerformanceData,
+            CircumsphereTestCase,
+            extract_benchmark_data,
+            format_benchmark_tables,
+        )
+        from scripts.hardware_utils import HardwareComparator, HardwareInfo
+        from scripts.subprocess_utils import (
+            ProjectRootNotFoundError,
+            find_project_root,
+            get_git_commit_hash,
+            run_cargo_command,
+            run_git_command,
+        )
 
 # Development mode arguments - centralized to keep baseline generation and comparison in sync
 # Reduces samples for faster iteration during development (10x faster than full benchmarks)
@@ -2193,10 +2211,14 @@ class BenchmarkRegressionHelper:
         """Extract commit SHA from metadata.json file."""
         try:
             with metadata_file.open("r", encoding="utf-8") as f:
-                metadata = json.load(f)
-                potential_sha = metadata.get("commit", "")
-                if re.match(r"^[0-9A-Fa-f]{7,40}$", potential_sha):
-                    return potential_sha
+                data: object = json.load(f)
+
+            if not isinstance(data, dict):
+                return None
+
+            potential_sha = data.get("commit")
+            if isinstance(potential_sha, str) and re.match(r"^[0-9A-Fa-f]{7,40}$", potential_sha):
+                return potential_sha
         except (OSError, json.JSONDecodeError, KeyError) as e:
             logging.debug("Could not extract commit from metadata.json: %s", e)
         return None

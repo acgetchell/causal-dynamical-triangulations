@@ -8,9 +8,23 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Internal helper: ensure uv is installed
 _ensure-uv:
-    #!/usr/bin/env bash
-    set -euo pipefail
     command -v uv >/dev/null || { echo "❌ 'uv' not found. See 'just setup' or https://github.com/astral-sh/uv"; exit 1; }
+
+# Internal helpers: ensure external tooling is installed
+_ensure-jq:
+    command -v jq >/dev/null || { echo "❌ 'jq' not found. See 'just setup' or install: brew install jq"; exit 1; }
+
+_ensure-npx:
+    command -v npx >/dev/null || { echo "❌ 'npx' not found. See 'just setup' or install Node.js (for npx tools): https://nodejs.org"; exit 1; }
+
+_ensure-taplo:
+    command -v taplo >/dev/null || { echo "❌ 'taplo' not found. See 'just setup' or install: brew install taplo (or: cargo install taplo-cli)"; exit 1; }
+
+_ensure-shellcheck:
+    command -v shellcheck >/dev/null || { echo "❌ 'shellcheck' not found. See 'just setup' or https://www.shellcheck.net"; exit 1; }
+
+_ensure-shfmt:
+    command -v shfmt >/dev/null || { echo "❌ 'shfmt' not found. See 'just setup' or https://github.com/mvdan/sh"; exit 1; }
 
 # GitHub Actions workflow validation
 action-lint:
@@ -41,12 +55,6 @@ bench-compile:
 build:
     cargo build
 
-build-ci:
-    cargo build --verbose --all-targets
-
-build-release:
-    cargo build --release
-
 # Changelog management
 changelog: _ensure-uv
     uv run changelog-utils generate
@@ -59,8 +67,16 @@ changelog-update: changelog
     @echo "To create a git tag with changelog content for a specific version, run:"
     @echo "  just changelog-tag <version>  # e.g., just changelog-tag v0.4.2"
 
-# CI parity: mirrors .github/workflows/ci.yml as closely as practical
-ci: fmt-check clippy-ci doc-ci validate-json toml-lint toml-fmt-check python-ci shell-ci markdown-ci yaml-ci build-ci build-release test-ci
+# Fix (mutating): apply formatters/auto-fixes
+fix: toml-fmt fmt python-fix shell-fmt markdown-fix
+    @echo "✅ Fixes applied!"
+
+# Check (non-mutating): run all linters/validators
+check: lint
+    @echo "✅ Checks complete!"
+
+# CI simulation: comprehensive checks + tests (matches .github/workflows/ci.yml)
+ci: check test test-integration bench-compile
     @echo "🎯 CI checks complete!"
 
 # CI with performance baseline
@@ -78,11 +94,8 @@ clean:
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W clippy::cargo
 
-clippy-ci:
-    cargo clippy --all-targets --all-features -- -D warnings
-
-# Pre-commit workflow: comprehensive validation (lint + tests + release + benches + kani)
-commit-check: lint test-all test-release bench-compile kani-fast
+# Pre-commit workflow: comprehensive validation (checks + tests + release + benches + kani)
+commit-check: check test-all test-release bench-compile kani-fast
     @echo "🚀 Ready to commit! All checks passed."
 
 # Coverage analysis
@@ -97,18 +110,12 @@ coverage-report *args: _ensure-uv
 default:
     @just --list
 
-# Development workflow: quick format, lint, and test cycle
-dev: fmt clippy test
+# Development workflow: quick format + core Rust checks + tests
+dev: fix clippy test
     @echo "⚡ Quick development check complete!"
 
 doc-check:
     RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --document-private-items
-
-doc-ci:
-    # Build documentation with warnings as errors
-    RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --all-features
-    # Also check that examples in documentation compile
-    cargo test --doc --all-features
 
 fmt:
     cargo fmt --all
@@ -118,23 +125,29 @@ fmt-check:
 
 help-workflows:
     @echo "Common Just workflows:"
-    @echo "  just dev           # Quick development cycle (format, lint, test)"
+    @echo "  just fix           # Apply formatters/auto-fixes (mutating)"
+    @echo "  just check         # Run linters/validators (non-mutating)"
+    @echo "  just dev           # Quick development cycle (fix + clippy + tests)"
     @echo "  just ci            # CI parity (mirrors .github/workflows/ci.yml)"
     @echo "  just commit-check  # Comprehensive pre-commit validation (recommended before pushing)"
     @echo "  just ci-baseline   # CI + save performance baseline"
     @echo ""
     @echo "Testing:"
-    @echo "  just test          # Rust tests (debug mode)"
-    @echo "  just test-all      # All tests (Rust + CLI, debug mode)"
-    @echo "  just test-cli      # CLI integration tests"
-    @echo "  just test-release  # All tests in release mode"
-    @echo "  just coverage      # Generate coverage report"
+    @echo "  just test              # Fast tests (lib + doc)"
+    @echo "  just test-ci           # CI tests (lib + integration + examples)"
+    @echo "  just test-integration  # Integration tests (tests/)"
+    @echo "  just test-doc          # Doc tests"
+    @echo "  just test-cli          # CLI integration tests only"
+    @echo "  just test-python       # Python tests (pytest)"
+    @echo "  just test-all          # All tests (CI + doc + Python)"
+    @echo "  just test-release      # All tests in release mode"
+    @echo "  just coverage          # Generate coverage report"
     @echo ""
     @echo "Quality Check Groups:"
-    @echo "  just lint          # All linting (code + docs + config)"
-    @echo "  just lint-code     # Code linting (Rust, Python, Shell)"
-    @echo "  just lint-docs     # Documentation linting (Markdown, Spelling)"
-    @echo "  just lint-config   # Configuration validation (JSON, TOML, Actions)"
+    @echo "  just lint          # All linting (non-mutating checks: code + docs + config)"
+    @echo "  just lint-code     # Code checks (Rust, Python, Shell)"
+    @echo "  just lint-docs     # Documentation checks (Markdown, Spelling)"
+    @echo "  just lint-config   # Configuration checks (JSON, TOML, Actions)"
     @echo ""
     @echo "Formal Verification:"
     @echo "  just kani          # Run all Kani formal verification proofs"
@@ -160,15 +173,11 @@ kani:
 kani-fast:
     cargo kani --harness verify_action_config
 
-# Code linting: Rust (fmt, clippy, docs) + Python (ruff) + Shell scripts
-lint-code: fmt clippy doc-check python-lint shell-lint
+# Code linting: Rust (fmt-check, clippy, docs) + Python + Shell scripts
+lint-code: fmt-check clippy doc-check python-check shell-check
 
 # Documentation linting: Markdown + spell checking
-lint-docs: markdown-lint spell-check
-
-markdown-ci:
-    # Lint Markdown files (non-blocking to match .github/workflows/ci.yml)
-    npx markdownlint "*.md" "scripts/*.md" "docs/*.md" ".github/*.md" || true
+lint-docs: markdown-check spell-check
 
 # Configuration validation: JSON, TOML, GitHub Actions workflows
 lint-config: validate-json toml-lint toml-fmt-check action-lint
@@ -176,8 +185,8 @@ lint-config: validate-json toml-lint toml-fmt-check action-lint
 # All linting: code + documentation + configuration
 lint: lint-code lint-docs lint-config
 
-# Shell and markdown quality
-markdown-lint:
+# Markdown: apply auto-fixes (mutating)
+markdown-fix: _ensure-npx
     #!/usr/bin/env bash
     set -euo pipefail
     files=()
@@ -187,7 +196,21 @@ markdown-lint:
     if [ "${#files[@]}" -gt 0 ]; then
         printf '%s\0' "${files[@]}" | xargs -0 -n100 npx markdownlint --config .markdownlint.json --fix
     else
-        echo "No markdown files found to lint."
+        echo "No markdown files found to format."
+    fi
+
+# Markdown: lint/check (non-mutating)
+markdown-check: _ensure-npx
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.md')
+    if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" | xargs -0 -n100 npx markdownlint --config .markdownlint.json
+    else
+        echo "No markdown files found to check."
     fi
 
 perf-baseline tag="": _ensure-uv
@@ -236,18 +259,14 @@ perf-trends days="7": _ensure-uv
     uv run performance-analysis --trends {{days}}
 
 # Python code quality
-python-lint: _ensure-uv
+python-fix: _ensure-uv
     uv run ruff check scripts/ --fix
     uv run ruff format scripts/
 
-python-ci: _ensure-uv
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Format check with ruff (non-blocking to match .github/workflows/ci.yml)
-    uvx ruff format --check scripts/ || echo "Python formatting issues found"
-    # Lint check with ruff (non-blocking to match .github/workflows/ci.yml)
-    uvx ruff check scripts/ || echo "Python linting issues found"
-
+python-check: _ensure-uv
+    uv run ruff format --check scripts/
+    uv run ruff check scripts/
+    uv run mypy scripts/*.py
 
 # Running the binary
 run *args:
@@ -311,18 +330,25 @@ setup:
         exit 1
     fi
     echo ""
-    echo "Installing Python tooling (ruff and related dependencies)..."
+    echo "Installing Python tooling (ruff, mypy, pytest, and related dependencies)..."
     uv sync --group dev
     echo ""
-    echo "Installing Kani verifier for formal verification (required for commit-check and Kani workflows)..."
-    cargo install --locked --force --version 0.66.0 kani-verifier
-    cargo kani --version
+    kani_version="0.66.0"
+    echo "Ensuring Kani verifier (kani-verifier ${kani_version}) is installed..."
+    installed_kani_version="$(cargo kani --version 2>/dev/null || true)"
+    if [[ "$installed_kani_version" == "cargo-kani ${kani_version}"* ]]; then
+        echo "  ✓ $installed_kani_version"
+    else
+        cargo install --locked --force --version "${kani_version}" kani-verifier
+        cargo kani --version
+    fi
     echo ""
     echo "Building project..."
     cargo build
     echo "✅ Setup complete! Run 'just help-workflows' to see available commands."
 
-shell-lint:
+# Shell scripts: format (mutating)
+shell-fmt: _ensure-shfmt
     #!/usr/bin/env bash
     set -euo pipefail
     files=()
@@ -331,40 +357,27 @@ shell-lint:
     done < <(git ls-files -z '*.sh')
     if [ "${#files[@]}" -gt 0 ]; then
         printf '%s\0' "${files[@]}" | xargs -0 -n1 shfmt -w
-        if command -v shellcheck &> /dev/null; then
-            printf '%s\0' "${files[@]}" | xargs -0 -n4 shellcheck -x
-        else
-            echo "⚠️ shellcheck not found, skipping shell script linting (formatting still applied)"
-        fi
     else
-        echo "No shell files found to lint."
+        echo "No shell files found to format."
     fi
-    # Note: justfiles are not shell scripts and are excluded from shellcheck
 
-shell-ci:
+# Shell scripts: lint/check (non-mutating)
+shell-check: _ensure-shellcheck _ensure-shfmt
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v shellcheck >/dev/null; then
-        echo "❌ 'shellcheck' not found. See 'just setup' or https://www.shellcheck.net"
-        exit 1
-    fi
-    if ! command -v shfmt >/dev/null; then
-        echo "❌ 'shfmt' not found. See 'just setup' or https://github.com/mvdan/sh"
-        exit 1
-    fi
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
-    done < <(find examples/scripts -type f -name '*.sh' -print0)
+    done < <(git ls-files -z '*.sh')
     if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 shellcheck
+        printf '%s\0' "${files[@]}" | xargs -0 -n4 shellcheck -x
         printf '%s\0' "${files[@]}" | xargs -0 shfmt -d
     else
-        echo "No shell scripts found to lint in examples/scripts."
+        echo "No shell files found to check."
     fi
 
 # Spell checking with robust bash implementation
-spell-check:
+spell-check: _ensure-npx
     #!/usr/bin/env bash
     set -euo pipefail
     files=()
@@ -387,25 +400,39 @@ spell-check:
         echo "No modified files to spell-check."
     fi
 
-# Testing
-test:
-    cargo test --verbose
+# Testing: fast tests (lib + doc)
+test: test-lib test-doc
 
-test-ci:
-    cargo test --lib --tests --verbose
-    cargo test --examples --verbose
+# Testing: CI suite (lib + integration + examples)
+test-ci: test-lib test-integration test-examples
 
-test-all: test test-cli
+# Testing: comprehensive suite (CI + doc + Python)
+test-all: test-ci test-doc test-python
     @echo "✅ All tests passed!"
+
+test-lib:
+    cargo test --lib --verbose
+
+test-doc:
+    cargo test --doc --verbose
+
+test-integration:
+    cargo test --tests --verbose
+
+test-examples:
+    cargo test --examples --verbose
 
 test-cli:
     cargo test --test cli --verbose
+
+test-python: _ensure-uv
+    uv run pytest
 
 test-release:
     cargo test --release
 
 # File validation
-validate-json:
+validate-json: _ensure-jq
     #!/usr/bin/env bash
     set -euo pipefail
     files=()
@@ -418,27 +445,9 @@ validate-json:
         echo "No JSON files found to validate."
     fi
 
-validate-toml: _ensure-uv
+toml-fmt: _ensure-taplo
     #!/usr/bin/env bash
     set -euo pipefail
-    files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(git ls-files -z '*.toml')
-    if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 -I {} uv run python -c "import tomllib; tomllib.load(open('{}', 'rb')); print('{} is valid TOML')"
-    else
-        echo "No TOML files found to validate."
-    fi
-
-toml-fmt:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if ! command -v taplo >/dev/null; then
-        echo "❌ 'taplo' not found. See 'just setup' or install: cargo install taplo-cli"
-        exit 1
-    fi
-
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
@@ -450,14 +459,9 @@ toml-fmt:
         echo "No TOML files found to format."
     fi
 
-toml-fmt-check:
+toml-fmt-check: _ensure-taplo
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v taplo >/dev/null; then
-        echo "❌ 'taplo' not found. See 'just setup' or install: cargo install taplo-cli"
-        exit 1
-    fi
-
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
@@ -469,14 +473,9 @@ toml-fmt-check:
         echo "No TOML files found to check."
     fi
 
-toml-lint:
+toml-lint: _ensure-taplo
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v taplo >/dev/null; then
-        echo "❌ 'taplo' not found. See 'just setup' or install: cargo install taplo-cli"
-        exit 1
-    fi
-
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
@@ -488,24 +487,3 @@ toml-lint:
         echo "No TOML files found to lint."
     fi
 
-yaml-ci: _ensure-uv
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Lint YAML files (non-blocking to match .github/workflows/ci.yml)
-    config_args=()
-    if [ -f .yamllint ]; then
-        config_args=(-c .yamllint)
-    fi
-    files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(git ls-files -z '*.yml' '*.yaml')
-    if [ "${#files[@]}" -gt 0 ]; then
-        if [ "${#config_args[@]}" -gt 0 ]; then
-            uvx yamllint "${config_args[@]}" "${files[@]}" || true
-        else
-            uvx yamllint "${files[@]}" || true
-        fi
-    else
-        echo "No YAML files found to lint."
-    fi

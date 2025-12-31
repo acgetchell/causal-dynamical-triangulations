@@ -36,15 +36,16 @@ class TestGetSafeExecutable:
     @pytest.mark.parametrize("command", ["echo", "git", "ls"])
     def test_finds_existing_executables(self, command):
         """Test that it finds common executables."""
+        # Skip commands that are not guaranteed cross-platform
+        if sys.platform.startswith("win") and command in {"ls", "echo"}:
+            pytest.skip(f"{command} may not be an external executable on Windows")
+
         result = get_safe_executable(command)
         assert isinstance(result, str)
         assert len(result) > 0
         assert Path(result).name.startswith(command)  # Command name should match basename
         # Absolute path on all platforms
         assert Path(result).is_absolute()
-        # Skip commands that are not guaranteed cross-platform
-        if sys.platform.startswith("win") and command in {"ls", "echo"}:
-            pytest.skip(f"{command} may not be an external executable on Windows")
 
     @pytest.mark.parametrize("fake_command", ["definitely-nonexistent-command-xyz", "fake-command-for-testing", "nonexistent123"])
     def test_raises_on_nonexistent_executables(self, fake_command):

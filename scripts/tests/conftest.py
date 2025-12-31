@@ -69,6 +69,7 @@ def mock_git_command_result():
         """Create a mock CompletedProcess object for git commands."""
         mock_result = Mock()
         mock_result.stdout = output  # mimic CompletedProcess.stdout (str)
+        mock_result.stderr = ""  # mimic CompletedProcess.stderr (str)
         mock_result.returncode = 0
         mock_result.args = ["git"]
         return mock_result

@@ -9,25 +9,106 @@ Requires Python 3.11+ for PEP 604 union types and datetime.UTC.
 import argparse
 import json
 import math
+import re
 import shutil
 import statistics
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, cast
 
-try:
-    # When executed as a script from scripts/
-    from subprocess_utils import (  # type: ignore[no-redef,import-not-found]
-        ExecutableNotFoundError,
-        run_cargo_command,
-    )
-except ModuleNotFoundError:
-    # When imported as a module (e.g., scripts.performance_analysis)
-    from scripts.subprocess_utils import (  # type: ignore[no-redef,import-not-found]
-        ExecutableNotFoundError,
-        run_cargo_command,
-    )
+if TYPE_CHECKING:
+    from subprocess_utils import ExecutableNotFoundError, run_cargo_command
+else:
+    try:
+        # When executed as a script from scripts/
+        from subprocess_utils import ExecutableNotFoundError, run_cargo_command
+    except ModuleNotFoundError:
+        # When imported as a module (e.g., scripts.performance_analysis)
+        from scripts.subprocess_utils import ExecutableNotFoundError, run_cargo_command
+
+
+class CriterionEstimate(TypedDict):
+    mean_ns: float
+    std_dev_ns: float
+    median_ns: float
+    mad_ns: float
+    timestamp: str
+    mean_ci_lower: NotRequired[float]
+    mean_ci_upper: NotRequired[float]
+
+
+# BaselineEntry for single value
+class BaselineEntry(TypedDict):
+    mean_ns: float
+
+
+class NewBenchmark(TypedDict):
+    benchmark: str
+    mean_ns: float
+
+
+class BenchmarkChange(TypedDict):
+    benchmark: str
+    change_percent: float
+    current_ns: float
+    baseline_ns: float
+    current_std: float
+    baseline_std: float
+
+
+class ComparisonSummary(TypedDict):
+    total_benchmarks: int
+    regressions: int
+    improvements: int
+    stable: int
+    new: int
+    avg_change: float
+    median_change: float
+    max_regression: float
+    max_improvement: float
+
+
+class ComparisonResult(TypedDict):
+    regressions: list[BenchmarkChange]
+    improvements: list[BenchmarkChange]
+    new_benchmarks: list[NewBenchmark]
+    stable: list[BenchmarkChange]
+    summary: ComparisonSummary | None
+
+
+# --- Trend analysis types ---
+TrendDirection = Literal["improving", "degrading", "stable"]
+
+
+class TrendInfo(TypedDict):
+    slope: float
+    trend: TrendDirection
+    data_points: int
+    first_value: float
+    last_value: float
+    change_percent: float
+
+
+class TrendAnalysisSuccess(TypedDict):
+    period_days: int
+    baselines_analyzed: int
+    trends: dict[str, TrendInfo]
+
+
+class TrendAnalysisError(TypedDict):
+    error: str
+
+
+TrendAnalysisResult = TrendAnalysisSuccess | TrendAnalysisError
+
+
+# LoadedBaseline for trend analysis
+class LoadedBaseline(TypedDict):
+    timestamp: datetime
+    file: Path
+    data: dict[str, CriterionEstimate]
 
 
 class PerformanceAnalyzer:
@@ -72,9 +153,9 @@ class PerformanceAnalyzer:
             print(f"❌ Error running benchmarks: {exc}")
             return False
 
-    def extract_criterion_results(self) -> dict:
+    def extract_criterion_results(self) -> dict[str, CriterionEstimate]:
         """Extract benchmark results from criterion output directory."""
-        results = {}
+        results: dict[str, CriterionEstimate] = {}
 
         if not self.results_dir.exists():
             print(f"Warning: Criterion results directory not found: {self.results_dir}")
@@ -113,7 +194,7 @@ class PerformanceAnalyzer:
 
         return results
 
-    def save_baseline(self, results: dict, tag: str | None = None) -> Path:
+    def save_baseline(self, results: dict[str, CriterionEstimate], tag: str | None = None) -> Path:
         """Save current results as a baseline."""
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"baseline_{tag}_{timestamp}.json" if tag else f"baseline_{timestamp}.json"
@@ -138,7 +219,7 @@ class PerformanceAnalyzer:
         print(f"✅ Saved baseline: {baseline_file}")
         return baseline_file
 
-    def load_baseline(self, baseline_path: Path | None = None) -> dict:
+    def load_baseline(self, baseline_path: Path | None = None) -> dict[str, CriterionEstimate]:
         """Load baseline results."""
         if baseline_path is None:
             baseline_path = self.baseline_dir / "latest.json"
@@ -148,19 +229,27 @@ class PerformanceAnalyzer:
 
         try:
             with open(baseline_path) as f:
-                return json.load(f)
+                data: object = json.load(f)
+            if isinstance(data, dict):
+                return cast("dict[str, CriterionEstimate]", data)
+            return {}
         except (json.JSONDecodeError, FileNotFoundError) as e:
             print(f"Warning: Could not load baseline {baseline_path}: {e}")
             return {}
 
-    def compare_results(self, current: dict, baseline: dict, threshold: float = 10.0) -> dict:
+    def compare_results(
+        self,
+        current: dict[str, CriterionEstimate],
+        baseline: dict[str, CriterionEstimate],
+        threshold: float = 10.0,
+    ) -> ComparisonResult:
         """Compare current results with baseline and categorize changes."""
-        comparison = {
+        comparison: ComparisonResult = {
             "regressions": [],
             "improvements": [],
             "new_benchmarks": [],
             "stable": [],
-            "summary": {},
+            "summary": None,
         }
 
         for benchmark, current_data in current.items():
@@ -176,13 +265,13 @@ class PerformanceAnalyzer:
 
             change_percent = ((current_mean - baseline_mean) / baseline_mean) * 100
 
-            change_data = {
+            change_data: BenchmarkChange = {
                 "benchmark": benchmark,
                 "change_percent": change_percent,
                 "current_ns": current_mean,
                 "baseline_ns": baseline_mean,
-                "current_std": current_data.get("std_dev_ns", 0),
-                "baseline_std": baseline.get(benchmark, {}).get("std_dev_ns", 0),
+                "current_std": current_data["std_dev_ns"],
+                "baseline_std": baseline[benchmark]["std_dev_ns"],
             }
 
             if change_percent > threshold:
@@ -223,9 +312,9 @@ class PerformanceAnalyzer:
             return f"{nanoseconds / 1_000_000:.1f}ms"
         return f"{nanoseconds / 1_000_000_000:.2f}s"
 
-    def print_comparison_results(self, comparison: dict):
+    def print_comparison_results(self, comparison: ComparisonResult) -> None:
         """Print comparison results to console with colors."""
-        summary = comparison.get("summary", {})
+        summary = comparison["summary"]
 
         if comparison["regressions"]:
             print("🔴 PERFORMANCE REGRESSIONS DETECTED:")
@@ -282,7 +371,7 @@ class PerformanceAnalyzer:
         if not comparison["regressions"] and not comparison["improvements"] and not comparison["new_benchmarks"]:
             print("✅ No significant performance changes detected")
 
-    def generate_report(self, comparison: dict, output_file: Path | None = None) -> str:
+    def generate_report(self, comparison: ComparisonResult, output_file: Path | None = None) -> str:
         """Generate a detailed performance report."""
         generated_at = datetime.now(UTC).isoformat(timespec="seconds")
         lines: list[str] = [
@@ -291,7 +380,7 @@ class PerformanceAnalyzer:
             "",
         ]
 
-        summary = comparison.get("summary", {})
+        summary = comparison["summary"]
         if summary:
             lines.extend(
                 [
@@ -377,73 +466,117 @@ class PerformanceAnalyzer:
 
         return report_content
 
-    def analyze_trends(self, days: int = 30) -> dict:
-        """Analyze performance trends over the specified number of days."""
-        cutoff_date = datetime.now(UTC) - timedelta(days=days)
-        baselines = []
+    @staticmethod
+    def _baseline_timestamp_from_filename(
+        baseline_file: Path,
+        timestamp_pattern: re.Pattern[str],
+    ) -> datetime | None:
+        match = timestamp_pattern.search(baseline_file.stem)
+        if not match:
+            return None
+
+        timestamp_str = match.group(0)
+        try:
+            # Baseline filenames do not encode a timezone; treat them as UTC.
+            return datetime.strptime(f"{timestamp_str}+0000", "%Y%m%d_%H%M%S%z")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _load_baseline_for_trend(baseline_file: Path) -> dict[str, CriterionEstimate] | None:
+        try:
+            with baseline_file.open(encoding="utf-8") as f:
+                data: object = json.load(f)
+        except json.JSONDecodeError:
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        return cast("dict[str, CriterionEstimate]", data)
+
+    def _load_trend_baselines(self, cutoff_date: datetime) -> list[LoadedBaseline]:
+        baselines: list[LoadedBaseline] = []
+        timestamp_pattern = re.compile(r"\d{8}_\d{6}$")
 
         for baseline_file in self.baseline_dir.glob("baseline_*.json"):
-            # Extract timestamp from filename
-            try:
-                timestamp_str = baseline_file.stem.split("_")[-2] + "_" + baseline_file.stem.split("_")[-1]
-                # Baseline filenames do not encode a timezone; treat them as UTC.
-                timestamp = datetime.strptime(f"{timestamp_str}+0000", "%Y%m%d_%H%M%S%z")
-
-                if timestamp >= cutoff_date:
-                    with open(baseline_file) as f:
-                        data = json.load(f)
-                        baselines.append(
-                            {
-                                "timestamp": timestamp,
-                                "file": baseline_file,
-                                "data": data,
-                            }
-                        )
-            except (ValueError, json.JSONDecodeError, IndexError):
+            timestamp = self._baseline_timestamp_from_filename(baseline_file, timestamp_pattern)
+            if timestamp is None or timestamp < cutoff_date:
                 continue
+
+            data = self._load_baseline_for_trend(baseline_file)
+            if data is None:
+                continue
+
+            baselines.append(
+                {
+                    "timestamp": timestamp,
+                    "file": baseline_file,
+                    "data": data,
+                }
+            )
+
+        baselines.sort(key=lambda baseline: baseline["timestamp"])
+        return baselines
+
+    @staticmethod
+    def _compute_trend_info(values: list[float]) -> TrendInfo:
+        n = len(values)
+
+        # Calculate trend (simple linear regression slope over observation index)
+        sum_x = sum(range(n))
+        sum_y = sum(values)
+        sum_xy = sum(i * v for i, v in enumerate(values))
+        sum_xx = sum(i * i for i in range(n))
+
+        denominator = n * sum_xx - sum_x * sum_x
+        # All data points at same position - treat as stable
+        slope = 0 if denominator == 0 else (n * sum_xy - sum_x * sum_y) / denominator
+
+        # Use small epsilon for floating point comparisons
+        epsilon = 1e-9
+
+        direction: TrendDirection
+        if slope < -epsilon:
+            direction = "improving"
+        elif slope > epsilon:
+            direction = "degrading"
+        else:
+            direction = "stable"
+
+        return {
+            "slope": slope,
+            "trend": direction,
+            "data_points": n,
+            "first_value": values[0],
+            "last_value": values[-1],
+            "change_percent": (((values[-1] - values[0]) / values[0]) * 100 if abs(values[0]) > epsilon else 0),
+        }
+
+    def analyze_trends(self, days: int = 30) -> TrendAnalysisResult:
+        """Analyze performance trends over the specified number of days."""
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+        baselines = self._load_trend_baselines(cutoff_date)
 
         if len(baselines) < 2:
             return {"error": "Not enough historical data for trend analysis"}
 
-        baselines.sort(key=lambda x: x["timestamp"])
-
-        # Analyze trends for each benchmark
-        trends = {}
-        benchmark_names = set()
+        trends: dict[str, TrendInfo] = {}
+        benchmark_names: set[str] = set()
         for baseline in baselines:
             benchmark_names.update(baseline["data"].keys())
 
         for benchmark in benchmark_names:
-            values = []
-            timestamps = []
-
+            values: list[float] = []
             for baseline in baselines:
-                if benchmark in baseline["data"]:
-                    values.append(baseline["data"][benchmark]["mean_ns"])
-                    timestamps.append(baseline["timestamp"])
+                estimate = baseline["data"].get(benchmark)
+                if estimate is not None:
+                    values.append(float(estimate["mean_ns"]))
 
-            if len(values) >= 2:
-                # Calculate trend (simple linear regression slope)
-                n = len(values)
-                sum_x = sum(range(n))
-                sum_y = sum(values)
-                sum_xy = sum(i * v for i, v in enumerate(values))
-                sum_xx = sum(i * i for i in range(n))
+            if len(values) < 2:
+                continue
 
-                denominator = n * sum_xx - sum_x * sum_x
-                # All data points at same position - treat as stable
-                slope = 0 if denominator == 0 else (n * sum_xy - sum_x * sum_y) / denominator
-
-                # Use small epsilon for floating point comparison
-                epsilon = 1e-9
-                trends[benchmark] = {
-                    "slope": slope,
-                    "trend": "improving" if slope < 0 else "degrading" if slope > 0 else "stable",
-                    "data_points": n,
-                    "first_value": values[0],
-                    "last_value": values[-1],
-                    "change_percent": (((values[-1] - values[0]) / values[0]) * 100 if abs(values[0]) > epsilon else 0),
-                }
+            trends[benchmark] = self._compute_trend_info(values)
 
         return {
             "period_days": days,
@@ -516,8 +649,8 @@ def _find_project_root(provided: Path | None) -> Path:
     raise ValueError(msg)
 
 
-def _print_performance_summary(comparison: dict) -> None:
-    summary = comparison.get("summary", {})
+def _print_performance_summary(comparison: ComparisonResult) -> None:
+    summary = comparison["summary"]
     if not summary:
         return
 
@@ -540,7 +673,8 @@ def _handle_trends(analyzer: PerformanceAnalyzer, days: int) -> int:
     trends = analyzer.analyze_trends(days)
 
     if "error" in trends:
-        print(f"❌ {trends['error']}")
+        error = cast("TrendAnalysisError", trends)["error"]
+        print(f"❌ {error}")
         return 1
 
     print(f"Analyzed {trends['baselines_analyzed']} baselines over {trends['period_days']} days")
@@ -563,7 +697,7 @@ def _handle_trends(analyzer: PerformanceAnalyzer, days: int) -> int:
     return 0
 
 
-def _collect_current_results(analyzer: PerformanceAnalyzer, no_run: bool) -> dict:
+def _collect_current_results(analyzer: PerformanceAnalyzer, no_run: bool) -> dict[str, CriterionEstimate]:
     if not no_run and not analyzer.run_benchmarks():
         return {}
 

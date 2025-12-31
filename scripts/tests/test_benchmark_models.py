@@ -132,22 +132,6 @@ class TestCircumsphereTestCase:
         # Should return 0.0 for non-existent method
         assert test_case.get_relative_performance("nonexistent_method") == pytest.approx(0.0)
 
-    def test_version_comparison_data_division_by_zero_edge_case(self):
-        """Test VersionComparisonData handles edge case gracefully."""
-        # This doesn't raise an exception but demonstrates pytest usage for edge case testing
-        comparison = VersionComparisonData(
-            test_case="Edge Case",
-            method="insphere",
-            old_version="v0.3.0",
-            new_version="v0.3.1",
-            old_value=0.0,  # Zero old value
-            new_value=100.0,
-            unit="ns",
-        )
-
-        # Should handle division by zero gracefully (returns 0.0)
-        assert comparison.improvement_pct == pytest.approx(0.0)
-
 
 class TestVersionComparisonData:
     """Test cases for VersionComparisonData class."""
@@ -180,6 +164,20 @@ class TestVersionComparisonData:
         )
 
         assert comparison.improvement_pct == 0.0
+
+    def test_division_by_zero_edge_case(self):
+        """Test VersionComparisonData handles edge case gracefully."""
+        comparison = VersionComparisonData(
+            test_case="Edge Case",
+            method="insphere",
+            old_version="v0.3.0",
+            new_version="v0.3.1",
+            old_value=0.0,  # Zero old value
+            new_value=100.0,
+            unit="ns",
+        )
+        # Should handle division by zero gracefully (returns 0.0)
+        assert comparison.improvement_pct == pytest.approx(0.0)
 
 
 class TestParsingFunctions:

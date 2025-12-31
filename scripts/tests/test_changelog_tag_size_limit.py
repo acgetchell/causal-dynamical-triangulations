@@ -79,18 +79,14 @@ class TestTagSizeLimitHandling:
 
                 content_size = len(content.encode("utf-8"))
 
-                # If this is also large, just verify the function works correctly
                 tag_message, is_truncated = ChangelogUtils._get_changelog_content(  # noqa: SLF001
                     "v0.5.3"
                 )
 
-        if content_size <= 125000:
-            assert is_truncated is False, "Small changelog should not be truncated"
-            assert tag_message == content, "Should return full content when under limit"
-        else:
-            # v0.5.3 is also large, so it should be truncated with reference
-            assert is_truncated is True
-            assert "See full changelog" in tag_message
+        # With the test fixture, v0.5.3 content is always small
+        assert content_size <= 125000, "Test fixture content should be under limit"
+        assert is_truncated is False, "Small changelog should not be truncated"
+        assert tag_message == content, "Should return full content when under limit"
 
     @patch("changelog_utils.run_git_command_with_input")
     def test_create_tag_with_message_truncated(self, mock_run_git_with_input):

@@ -103,7 +103,9 @@ Before you begin, ensure you have:
    ```bash
    cargo fmt            # Format code
    cargo clippy --all-targets -- -D warnings  # Linting
-   just lint            # Lint code, docs, and config
+   just fix             # Apply formatters/auto-fixes (recommended)
+   just check           # Run all non-mutating checks
+   just lint            # Lint code, docs, and config (checks only)
    ```
 
 7. **Use Just for comprehensive workflows** (recommended):
@@ -202,15 +204,17 @@ This project uses [Just] as the primary task automation tool. Just provides bett
 
 ```bash
 just setup          # Complete environment setup
-just dev             # Quick development cycle: format, lint, test
-just ci              # CI parity (mirrors .github/workflows/ci.yml)
-just commit-check    # Comprehensive pre-commit validation (recommended before pushing)
-just lint            # Lint code, docs, and config
-just test-all        # All test suites
-just kani            # Run all formal verification proofs
-just kani-fast       # Run subset of Kani proofs (faster)
-just bench           # Run performance benchmarks
-just clean           # Clean build artifacts
+just fix            # Apply formatters/auto-fixes (mutating)
+just check          # Run linters/validators (non-mutating)
+just dev            # Quick development cycle (fix + clippy + tests)
+just ci             # CI parity (mirrors .github/workflows/ci.yml)
+just commit-check   # Comprehensive pre-commit validation (recommended before pushing)
+just lint           # Lint code, docs, and config (checks only)
+just test-all       # All test suites
+just kani           # Run all formal verification proofs
+just kani-fast      # Run subset of Kani proofs (faster)
+just bench          # Run performance benchmarks
+just clean          # Clean build artifacts
 ```
 
 **Workflow Help:**

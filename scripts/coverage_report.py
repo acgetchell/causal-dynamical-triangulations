@@ -19,7 +19,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_report(report_path: Path) -> dict:
+def load_report(report_path: Path) -> dict[str, Any]:
     """
     Load and parse the Tarpaulin coverage report from disk.
 
@@ -89,15 +89,21 @@ def load_report(report_path: Path) -> dict:
         report_path (Path): Path to the Tarpaulin JSON coverage report.
 
     Returns:
-        dict: Parsed JSON payload describing coverage information.
+        dict[str, Any]: Parsed JSON payload describing coverage information.
 
     Raises:
         SystemExit: If the report file does not exist.
     """
     if not report_path.is_file():
         raise SystemExit(f"Coverage report not found: {report_path}")
+
     with report_path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        data: object = json.load(handle)
+
+    if not isinstance(data, dict):
+        raise SystemExit(f"Coverage report root must be a JSON object: {report_path}")
+
+    return cast("dict[str, Any]", data)
 
 
 def coverage_entries(data: dict) -> Iterable[CoverageEntry]:

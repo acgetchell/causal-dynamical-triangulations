@@ -18,13 +18,17 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
-    # When executed as a script from scripts/
-    from subprocess_utils import run_safe_command  # type: ignore[no-redef,import-not-found]
-except ModuleNotFoundError:
-    # When imported as a module (e.g., scripts.hardware_utils)
-    from scripts.subprocess_utils import run_safe_command  # type: ignore[no-redef,import-not-found]
+if TYPE_CHECKING:
+    from subprocess_utils import run_safe_command
+else:
+    try:
+        # When executed as a script from scripts/
+        from subprocess_utils import run_safe_command
+    except ModuleNotFoundError:
+        # When imported as a module (e.g., scripts.hardware_utils)
+        from scripts.subprocess_utils import run_safe_command
 
 # Configure a module-level logger
 logger = logging.getLogger(__name__)
@@ -99,7 +103,7 @@ class HardwareInfo:
 
         # Fallback to /proc/cpuinfo
         try:
-            with open("/proc/cpuinfo") as f:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith(("model name", "Processor")):
                         return line.split(":", 1)[1].strip()
@@ -119,7 +123,7 @@ class HardwareInfo:
             # Fallback: parse physical core count from /proc/cpuinfo
             try:
                 physical_cores: set[tuple[str, str]] = set()
-                with open("/proc/cpuinfo") as f:
+                with open("/proc/cpuinfo", encoding="utf-8") as f:
                     physical_id = core_id = None
                     for line in f:
                         if line.startswith("physical id"):
@@ -172,7 +176,7 @@ class HardwareInfo:
 
         # Fallback to /proc/cpuinfo
         try:
-            with open("/proc/cpuinfo") as f:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
                 processor_count = sum(1 for line in f if line.startswith("processor"))
                 return str(processor_count)
         except (FileNotFoundError, PermissionError):
@@ -271,7 +275,7 @@ class HardwareInfo:
             if self.os_type == "Linux":
                 # Linux - extract from /proc/meminfo
                 try:
-                    with open("/proc/meminfo") as f:
+                    with open("/proc/meminfo", encoding="utf-8") as f:
                         for line in f:
                             if line.startswith("MemTotal:"):
                                 mem_kb = int(line.split()[1])
@@ -452,19 +456,9 @@ class HardwareComparator:
                     key = key.strip().upper().replace(" ", "_")
                     value = value.strip()
 
-                    # Map keys to our standard format
-                    key_mapping = {
-                        "OS": "OS",
-                        "CPU": "CPU",
-                        "CPU_CORES": "CPU_CORES",
-                        "CPU_THREADS": "CPU_THREADS",
-                        "MEMORY": "MEMORY",
-                        "RUST": "RUST",
-                        "TARGET": "TARGET",
-                    }
-
-                    if key in key_mapping:
-                        info[key_mapping[key]] = value
+                    # Only accept known keys
+                    if key in info:
+                        info[key] = value
 
         return info
 

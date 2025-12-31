@@ -72,7 +72,9 @@ how to install them.
 
 **Just Workflows:**
 
-- `just dev` - Quick development cycle (format, lint, test)
+- `just fix` - Apply formatters/auto-fixes (mutating)
+- `just check` - Run linters/validators (non-mutating)
+- `just dev` - Quick development cycle (fix + clippy + tests)
 - `just ci` - CI parity (mirrors `.github/workflows/ci.yml`)
 - `just commit-check` - Comprehensive pre-commit validation (includes Kani)
 

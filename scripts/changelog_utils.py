@@ -620,7 +620,7 @@ class ChangelogUtils:
 
         # Match cron expressions: sequences with asterisks and numbers/spaces
         # Pattern: quoted strings containing digits, spaces, asterisks, and hyphens
-        def protect_match(match: re.Match) -> str:
+        def protect_match(match: re.Match[str]) -> str:
             content = match.group(0)
             # If already in backticks, leave it alone
             if content.startswith("`") and content.endswith("`"):
@@ -726,7 +726,7 @@ class ChangelogUtils:
         if stripped.startswith("```") or re.match(r"^`[^`]+`$", stripped):
             return line
 
-        def repl(match: re.Match) -> str:
+        def repl(match: re.Match[str]) -> str:
             url = match.group(0)
             start = match.start()
             # Skip if already inside <...>
@@ -1399,15 +1399,45 @@ class _ReleaseNotesPostProcessor:
     _TEST_METRICS_RE = re.compile(r"^\s*All tests pass\s*:\s*", re.IGNORECASE)
     _PERF_RESULTS_RE = re.compile(r"refresh performance results", re.IGNORECASE)
 
+    # Titles that should be treated as breaking changes when found inside a release-note entry.
+    #
+    # This list is heuristics-based and intentionally conservative: false positives will
+    # promote entries into the "⚠️ Breaking Changes" section, so prefer patterns that
+    # strongly imply downstream-facing breakage.
+    #
+    # cspell:ignore incompatib ility bincompatib bcompatib bdeprecat touchpoints
     _BREAKING_TITLE_PATTERNS: tuple[re.Pattern[str], ...] = (
+        # MSRV bumps are breaking for downstream users.
         re.compile(r"\bmsrv\b", re.IGNORECASE),
         re.compile(r"\bminimum supported rust version\b", re.IGNORECASE),
         re.compile(r"\brust-version\b", re.IGNORECASE),
+        # Explicit breaking / compatibility language.
+        re.compile(r"\bbreaking\b", re.IGNORECASE),
+        re.compile(r"\bbackward(?:s)?[- ]?incompatib(?:le|ility)\b", re.IGNORECASE),
+        re.compile(r"\bincompatib(?:le|ility)\b", re.IGNORECASE),
+        re.compile(r"\bnot\b.*\bcompatib(?:le|ility)\b", re.IGNORECASE),
+        # Return-type / signature changes (typically breaking API changes).
+        re.compile(r"\bsignature changed\b", re.IGNORECASE),
+        re.compile(r"\breturn type\b", re.IGNORECASE),
+        re.compile(r"\bnow returns\b", re.IGNORECASE),
+        re.compile(r"\breturns?\b.*\b(?:instead of|rather than)\b", re.IGNORECASE),
+        # API removals / deprecations. We scope these to public-facing language to avoid
+        # classifying internal cleanups as breaking changes.
+        re.compile(
+            r"\b(?:remove|removed|drop|dropped|delete|deleted)\b.*\b(?:public|api|interface|re-export|export|method|function|trait|struct|enum|variant)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\bdeprecat(?:e|ed|ion)\b.*\b(?:api|public|interface|re-export|export)\b",
+            re.IGNORECASE,
+        ),
+        # Project-specific known breaking API touchpoints.
         re.compile(r"\binsert_with_statistics\b", re.IGNORECASE),
         re.compile(r"\binsert_transactional\b", re.IGNORECASE),
-        re.compile(r"\bsignature changed\b", re.IGNORECASE),
-        re.compile(r"\bnow returns\b", re.IGNORECASE),
     )
+
+    # Reverse of `ChangelogUtils.escape_markdown()` for heuristic matching only.
+    _MD_ESCAPES_RE = re.compile(r"\\([\\*_`\[\]])")
 
     _COMMIT_LINK_RE = re.compile(r"\[`(?P<sha>[a-f0-9]{7,40})`\]\((?P<url>[^)]+)\)")
     _TITLE_RE = re.compile(r"^\s*-\s+\*\*(?P<title>.*?)\*\*")
@@ -1880,8 +1910,19 @@ class _ReleaseNotesPostProcessor:
         return None
 
     @classmethod
+    def _unescape_markdown_escapes(cls, text: str) -> str:
+        """Reverse markdown escaping for heuristic matching only.
+
+        This intentionally mirrors `ChangelogUtils.escape_markdown()` so that patterns
+        like `insert_transactional` still match titles that appear as `insert\\_transactional`
+        in the changelog.
+        """
+        return cls._MD_ESCAPES_RE.sub(r"\1", text)
+
+    @classmethod
     def _is_breaking_title(cls, title: str) -> bool:
-        return any(p.search(title) for p in cls._BREAKING_TITLE_PATTERNS)
+        match_text = cls._unescape_markdown_escapes(title)
+        return any(p.search(match_text) for p in cls._BREAKING_TITLE_PATTERNS)
 
     @staticmethod
     def _remove_empty_section(lines: list[str], section_header: str) -> list[str]:

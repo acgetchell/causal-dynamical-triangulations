@@ -37,6 +37,7 @@ use crate::geometry::traits::{
 use delaunay::core::delaunay_triangulation::DelaunayTriangulation;
 use delaunay::geometry::kernel::FastKernel;
 use delaunay::prelude::*;
+use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -67,6 +68,13 @@ where
 {
     /// The underlying Delaunay triangulation from the delaunay crate
     dt: Arc<DelaunayTriangulation<FastKernel<f64>, VertexData, CellData, D>>,
+
+    /// Lazily initialized cache for expensive topology queries (edges, edge endpoints, etc.).
+    ///
+    /// This backend currently does not implement mutation operations. If/when mutation support
+    /// is added, this cache must be invalidated whenever the triangulation topology changes.
+    edge_cache: RefCell<Option<Arc<DelaunayEdgeCache>>>,
+
     _phantom: PhantomData<(VertexData, CellData)>,
 }
 
@@ -87,6 +95,61 @@ pub struct DelaunayEdgeHandle {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DelaunayFaceHandle {
     id: uuid::Uuid,
+}
+
+/// Lazily-built cache for edge queries.
+///
+/// The delaunay crate exposes facets; in 2D, facets correspond to edges. Several query methods
+/// (e.g. `edges()` and `edge_endpoints()`) need to scan all facets and de-duplicate edges. We cache
+/// the results to avoid repeated O(E) scans for read-only triangulations.
+#[derive(Debug)]
+struct DelaunayEdgeCache {
+    /// Unique edge handles, sorted by their `id` (facet index at first occurrence).
+    edges: Arc<Vec<DelaunayEdgeHandle>>,
+
+    /// Map from edge handle `id` to its endpoint vertex UUIDs.
+    endpoints_by_id: std::collections::HashMap<usize, (uuid::Uuid, uuid::Uuid)>,
+}
+
+impl DelaunayEdgeCache {
+    fn build<VertexData, CellData, const D: usize>(
+        dt: &DelaunayTriangulation<FastKernel<f64>, VertexData, CellData, D>,
+    ) -> Self
+    where
+        VertexData: delaunay::core::DataType,
+        CellData: delaunay::core::DataType,
+    {
+        let mut seen: std::collections::HashSet<[uuid::Uuid; 2]> = std::collections::HashSet::new();
+        let mut handles: Vec<DelaunayEdgeHandle> = Vec::new();
+        let mut endpoints_by_id: std::collections::HashMap<usize, (uuid::Uuid, uuid::Uuid)> =
+            std::collections::HashMap::new();
+
+        for (idx, facet_view) in dt.facets().enumerate() {
+            if let Ok(vertices_iter) = facet_view.vertices() {
+                let vertices: Vec<_> = vertices_iter.collect();
+                if vertices.len() == 2 {
+                    let uuid1 = vertices[0].uuid();
+                    let uuid2 = vertices[1].uuid();
+
+                    // Use a sorted UUID pair as the canonical key for deduplicating shared facets.
+                    let mut edge = [uuid1, uuid2];
+                    edge.sort();
+
+                    if seen.insert(edge) {
+                        handles.push(DelaunayEdgeHandle { id: idx });
+                        endpoints_by_id.insert(idx, (uuid1, uuid2));
+                    }
+                }
+            }
+        }
+
+        handles.sort_by_key(|h| h.id);
+
+        Self {
+            edges: Arc::new(handles),
+            endpoints_by_id,
+        }
+    }
 }
 
 /// Error type for Delaunay backend operations
@@ -135,6 +198,7 @@ where
     ) -> Self {
         Self {
             dt: Arc::new(dt),
+            edge_cache: RefCell::new(None),
             _phantom: PhantomData,
         }
     }
@@ -161,6 +225,19 @@ where
     #[inline]
     fn cell_key_from_handle(&self, handle: &DelaunayFaceHandle) -> Option<CellKey> {
         self.tds().cell_key_from_uuid(&handle.id)
+    }
+
+    #[inline]
+    fn get_edge_cache(&self) -> Arc<DelaunayEdgeCache> {
+        // Fast path: already cached.
+        if let Some(cache) = self.edge_cache.borrow().as_ref() {
+            return Arc::clone(cache);
+        }
+
+        // Slow path: build cache.
+        let cache = Arc::new(DelaunayEdgeCache::build(&self.dt));
+        *self.edge_cache.borrow_mut() = Some(Arc::clone(&cache));
+        cache
     }
 }
 
@@ -222,25 +299,17 @@ where
         )
     }
 
+    /// Iterate all unique edges in the triangulation.
+    ///
+    /// **Performance Note**: Building the edge list requires an O(E) scan over all facets
+    /// (using a `HashSet` for uniqueness). The Delaunay backend builds this list lazily and
+    /// caches it for reuse, so subsequent calls avoid re-scanning facets.
     fn edges(&self) -> Box<dyn Iterator<Item = Self::EdgeHandle> + '_> {
-        let mut seen = std::collections::HashSet::new();
-        let mut handles = Vec::new();
+        let cache = self.get_edge_cache();
+        let edges = Arc::clone(&cache.edges);
 
-        for (idx, facet_view) in self.dt.facets().enumerate() {
-            if let Ok(vertices_iter) = facet_view.vertices() {
-                let vertices: Vec<_> = vertices_iter.collect();
-                if vertices.len() == 2 {
-                    let mut edge = [vertices[0].uuid(), vertices[1].uuid()];
-                    edge.sort();
-                    if seen.insert(edge) {
-                        handles.push(DelaunayEdgeHandle { id: idx });
-                    }
-                }
-            }
-        }
-
-        handles.sort_by_key(|h| h.id);
-        Box::new(handles.into_iter())
+        // Return an iterator that owns the `Arc`, avoiding borrowing `self`/`RefCell` across yields.
+        Box::new((0..edges.len()).map(move |i| edges[i].clone()))
     }
 
     fn faces(&self) -> Box<dyn Iterator<Item = Self::FaceHandle> + '_> {
@@ -305,31 +374,31 @@ where
         Ok(vertices)
     }
 
+    /// Get the endpoint vertices of an edge.
+    ///
+    /// **Performance Note**: Lookup is O(1) once the edge cache has been built. The first call
+    /// that requires edge data triggers an O(E) scan of facets to populate the cache.
     fn edge_endpoints(
         &self,
         edge: &Self::EdgeHandle,
     ) -> Result<(Self::VertexHandle, Self::VertexHandle), Self::Error> {
-        for (idx, facet_view) in self.dt.facets().enumerate() {
-            if idx == edge.id
-                && let Ok(vertices_iter) = facet_view.vertices()
-            {
-                let vertices: Vec<_> = vertices_iter.collect();
-                if vertices.len() == 2 {
-                    return Ok((
-                        DelaunayVertexHandle {
-                            id: vertices[0].uuid(),
-                        },
-                        DelaunayVertexHandle {
-                            id: vertices[1].uuid(),
-                        },
-                    ));
-                }
-            }
+        let cache = self.get_edge_cache();
+
+        if let Some((u1, u2)) = cache.endpoints_by_id.get(&edge.id) {
+            return Ok((
+                DelaunayVertexHandle { id: *u1 },
+                DelaunayVertexHandle { id: *u2 },
+            ));
         }
 
         Err(DelaunayError::InvalidHandle("Edge not found".to_string()))
     }
 
+    /// Return all faces incident to (adjacent to) the given vertex.
+    ///
+    /// **Performance Note**: This is currently an O(F) scan over all cells to find those that
+    /// contain the vertex. If this becomes a hot path, consider building an index (vertex -> faces)
+    /// or caching results at a higher level.
     fn adjacent_faces(
         &self,
         vertex: &Self::VertexHandle,
