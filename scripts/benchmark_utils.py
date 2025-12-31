@@ -19,11 +19,10 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-
-# NOTE: Use copy2 (metadata-preserving) under the 'copyfile' alias for tests/patching convenience.
-from shutil import copy2 as copyfile
+from shutil import copy2 as copyfile  # NOTE: Use copy2 (metadata-preserving) under the 'copyfile' alias for tests/patching convenience.
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -2059,7 +2058,7 @@ class BenchmarkRegressionHelper:
     """Helper functions for performance regression testing workflow."""
 
     @staticmethod
-    def write_github_env_vars(env_vars: dict[str, str]) -> None:
+    def write_github_env_vars(env_vars: Mapping[str, str | None]) -> None:
         """Helper to write multiple environment variables to GITHUB_ENV.
         Args:
             env_vars: Dictionary of environment variable names and values
@@ -2095,9 +2094,19 @@ class BenchmarkRegressionHelper:
         """
         # Look for baseline files using shared logic
         baseline_file = BenchmarkRegressionHelper._find_baseline_file(baseline_dir)
+        if baseline_file is None:
+            print("❌ Downloaded artifact but no baseline*.txt files found", file=sys.stderr)
+            BenchmarkRegressionHelper.write_github_env_vars(
+                {
+                    "BASELINE_EXISTS": "false",
+                    "BASELINE_SOURCE": "missing",
+                    "BASELINE_ORIGIN": "unknown",
+                }
+            )
+            return False
 
         # If a baseline file was found, copy it to baseline_results.txt for consistency
-        if baseline_file and baseline_file.name != "baseline_results.txt":
+        if baseline_file.name != "baseline_results.txt":
             target_file = baseline_dir / "baseline_results.txt"
             try:
                 copyfile(baseline_file, target_file)
@@ -2105,19 +2114,24 @@ class BenchmarkRegressionHelper:
             except OSError as e:
                 print(f"❌ Failed to prepare baseline: {e}", file=sys.stderr)
                 BenchmarkRegressionHelper.write_github_env_vars(
-                    {"BASELINE_EXISTS": "false", "BASELINE_SOURCE": "artifact", "BASELINE_ORIGIN": "artifact"}
+                    {
+                        "BASELINE_EXISTS": "false",
+                        "BASELINE_SOURCE": "artifact",
+                        "BASELINE_ORIGIN": "artifact",
+                    }
                 )
                 return False
-        elif baseline_file:
-            print("📦 Prepared baseline from artifact")
         else:
-            print("❌ Downloaded artifact but no baseline*.txt files found", file=sys.stderr)
-            BenchmarkRegressionHelper.write_github_env_vars({"BASELINE_EXISTS": "false", "BASELINE_SOURCE": "missing", "BASELINE_ORIGIN": "unknown"})
-            return False
+            print("📦 Prepared baseline from artifact")
 
         # Set GitHub Actions environment variables
         BenchmarkRegressionHelper.write_github_env_vars(
-            {"BASELINE_EXISTS": "true", "BASELINE_SOURCE": "artifact", "BASELINE_ORIGIN": "artifact", "BASELINE_SOURCE_FILE": baseline_file.name}
+            {
+                "BASELINE_EXISTS": "true",
+                "BASELINE_SOURCE": "artifact",
+                "BASELINE_ORIGIN": "artifact",
+                "BASELINE_SOURCE_FILE": baseline_file.name,
+            }
         )
 
         # Show baseline metadata

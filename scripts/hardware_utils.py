@@ -197,8 +197,11 @@ class HardwareInfo:
             Tuple of (cpu_model, cpu_cores, cpu_threads)
         """
         # Try pwsh first, then powershell
-        ps_cmd = "pwsh" if shutil.which("pwsh") else "powershell"
-        if not shutil.which(ps_cmd):
+        if shutil.which("pwsh"):
+            ps_cmd = "pwsh"
+        elif shutil.which("powershell"):
+            ps_cmd = "powershell"
+        else:
             return "Unknown", "Unknown", "Unknown"
 
         try:
@@ -282,14 +285,16 @@ class HardwareInfo:
         Returns:
             Memory size as string (e.g., "16.0 GB")
         """
+        memory = "Unknown"
+
         try:
             if self.os_type == "Darwin":
                 # macOS - convert bytes to GB
                 mem_bytes = int(self._run_command(["sysctl", "-n", "hw.memsize"]))
                 memory_gb = mem_bytes / (1024**3)
-                return f"{memory_gb:.1f} GB"
+                memory = f"{memory_gb:.1f} GB"
 
-            if self.os_type == "Linux":
+            elif self.os_type == "Linux":
                 # Linux - extract from /proc/meminfo
                 try:
                     with open("/proc/meminfo", encoding="utf-8") as f:
@@ -297,7 +302,8 @@ class HardwareInfo:
                             if line.startswith("MemTotal:"):
                                 mem_kb = int(line.split()[1])
                                 memory_gb = mem_kb / (1024 * 1024)
-                                return f"{memory_gb:.1f} GB"
+                                memory = f"{memory_gb:.1f} GB"
+                                break
                 except (FileNotFoundError, PermissionError, ValueError):
                     pass
 
@@ -312,14 +318,14 @@ class HardwareInfo:
                             '$mem_gb = [math]::Round($mem_bytes / 1GB, 1); Write-Output "$mem_gb GB" '
                             '} catch { Write-Output "Unknown" }'
                         )
-                        return self._run_powershell_command(ps_cmd, ps_mem_cmd)
+                        memory = self._run_powershell_command(ps_cmd, ps_mem_cmd)
                     except subprocess.CalledProcessError:
                         pass
 
         except Exception as e:
             logger.debug("Failed to get memory info for OS %s: %s", self.os_type, e)
 
-        return "Unknown"
+        return memory
 
     def get_rust_info(self) -> tuple[str, str]:
         """

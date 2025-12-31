@@ -262,10 +262,16 @@ python-fix: _ensure-uv
     uv run ruff check scripts/ --fix
     uv run ruff format scripts/
 
+python-typecheck:
+    @echo "🔍 ty (primary)"
+    uv run ty check scripts/
+    @echo "🔍 mypy (compatibility)"
+    uv run mypy scripts/*.py
+
 python-check: _ensure-uv
     uv run ruff format --check scripts/
     uv run ruff check scripts/
-    uv run mypy scripts/*.py
+    just python-typecheck
 
 # Running the binary
 run *args:

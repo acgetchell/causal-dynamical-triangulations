@@ -106,6 +106,77 @@ class LoadedBaseline(TypedDict):
     data: dict[str, CriterionEstimate]
 
 
+_BASELINE_REQUIRED_KEYS: set[str] = {
+    "mad_ns",
+    "mean_ns",
+    "median_ns",
+    "std_dev_ns",
+    "timestamp",
+}
+_BASELINE_NUMERIC_KEYS: set[str] = {"mad_ns", "mean_ns", "median_ns", "std_dev_ns"}
+_BASELINE_OPTIONAL_NUMERIC_KEYS: set[str] = {"mean_ci_lower", "mean_ci_upper"}
+
+
+def _baseline_entry_validation_error(
+    benchmark: object,
+    estimate: object,
+    *,
+    baseline_path: Path,
+) -> str | None:
+    error: str | None = None
+
+    if not isinstance(benchmark, str):
+        error = f"Warning: Invalid benchmark name {benchmark!r} in baseline {baseline_path}"
+    elif not isinstance(estimate, dict):
+        error = f"Warning: Invalid entry '{benchmark}' in baseline {baseline_path}"
+    else:
+        estimate_dict = cast("dict[str, object]", estimate)
+
+        missing = _BASELINE_REQUIRED_KEYS.difference(estimate_dict.keys())
+        if missing:
+            missing_display = ", ".join(sorted(missing))
+            error = f"Warning: Missing required keys in '{benchmark}' in baseline {baseline_path}: {missing_display}"
+        else:
+            for key in _BASELINE_NUMERIC_KEYS:
+                value = estimate_dict.get(key)
+                if not isinstance(value, (int, float)):
+                    error = f"Warning: Invalid '{key}' in '{benchmark}' in baseline {baseline_path}"
+                    break
+
+            if error is None:
+                timestamp = estimate_dict.get("timestamp")
+                if not isinstance(timestamp, str):
+                    error = f"Warning: Invalid 'timestamp' in '{benchmark}' in baseline {baseline_path}"
+                else:
+                    for key in _BASELINE_OPTIONAL_NUMERIC_KEYS:
+                        if key in estimate_dict and not isinstance(estimate_dict.get(key), (int, float)):
+                            error = f"Warning: Invalid '{key}' in '{benchmark}' in baseline {baseline_path}"
+                            break
+
+    return error
+
+
+def _validated_baseline_data(
+    data: object,
+    *,
+    baseline_path: Path,
+) -> dict[str, CriterionEstimate] | None:
+    if not isinstance(data, dict):
+        return None
+
+    for benchmark, estimate in data.items():
+        error = _baseline_entry_validation_error(
+            benchmark,
+            estimate,
+            baseline_path=baseline_path,
+        )
+        if error is not None:
+            print(error)
+            return None
+
+    return cast("dict[str, CriterionEstimate]", data)
+
+
 class PerformanceAnalyzer:
     """Advanced performance analysis for CDT benchmarks."""
 
@@ -164,25 +235,55 @@ class PerformanceAnalyzer:
                 with open(estimates_file, encoding="utf-8") as f:
                     data = json.load(f)
 
+                if not isinstance(data, dict):
+                    continue
+
+                data_dict = cast("dict[str, object]", data)
+
+                def _point_estimate(
+                    section_name: str,
+                    *,
+                    _data: dict[str, object] = data_dict,
+                ) -> float:
+                    section = _data.get(section_name)
+                    if not isinstance(section, dict):
+                        return 0.0
+
+                    section_dict = cast("dict[str, object]", section)
+                    point_estimate = section_dict.get("point_estimate")
+                    return float(point_estimate) if isinstance(point_estimate, (int, float)) else 0.0
+
                 # Build benchmark name from path structure
                 # e.g., action_calculations/calculate_action/50/base/estimates.json
                 # becomes "action_calculations/calculate_action/50"
                 path_parts = estimates_file.relative_to(self.results_dir).parts[:-2]  # Remove '<run_type>/estimates.json'
-                benchmark_name = "/".join(path_parts)
+                benchmark_name: str = "/".join(path_parts)
 
-                results[benchmark_name] = {
-                    "mean_ns": data.get("mean", {}).get("point_estimate", 0),
-                    "std_dev_ns": data.get("std_dev", {}).get("point_estimate", 0),
-                    "median_ns": data.get("median", {}).get("point_estimate", 0),
-                    "mad_ns": data.get("median_abs_dev", {}).get("point_estimate", 0),
+                estimate: CriterionEstimate = {
+                    "mean_ns": _point_estimate("mean"),
+                    "std_dev_ns": _point_estimate("std_dev"),
+                    "median_ns": _point_estimate("median"),
+                    "mad_ns": _point_estimate("median_abs_dev"),
                     "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
                 }
 
                 # Add confidence intervals if available
-                mean_ci = data.get("mean", {}).get("confidence_interval", {})
-                if mean_ci:
-                    results[benchmark_name]["mean_ci_lower"] = mean_ci.get("lower_bound", 0)
-                    results[benchmark_name]["mean_ci_upper"] = mean_ci.get("upper_bound", 0)
+                mean_section = data_dict.get("mean")
+                if isinstance(mean_section, dict):
+                    mean_dict = cast("dict[str, object]", mean_section)
+                    mean_ci = mean_dict.get("confidence_interval")
+                    if isinstance(mean_ci, dict):
+                        mean_ci_dict = cast("dict[str, object]", mean_ci)
+
+                        lower = mean_ci_dict.get("lower_bound")
+                        if isinstance(lower, (int, float)):
+                            estimate["mean_ci_lower"] = float(lower)
+
+                        upper = mean_ci_dict.get("upper_bound")
+                        if isinstance(upper, (int, float)):
+                            estimate["mean_ci_upper"] = float(upper)
+
+                results[benchmark_name] = estimate
 
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Warning: Could not parse {estimates_file}: {e}")
@@ -225,12 +326,15 @@ class PerformanceAnalyzer:
         try:
             with open(baseline_path, encoding="utf-8") as f:
                 data: object = json.load(f)
-            if isinstance(data, dict):
-                return cast("dict[str, CriterionEstimate]", data)
-            return {}
         except (json.JSONDecodeError, FileNotFoundError) as e:
             print(f"Warning: Could not load baseline {baseline_path}: {e}")
             return {}
+
+        validated = _validated_baseline_data(data, baseline_path=baseline_path)
+        if validated is None:
+            return {}
+
+        return validated
 
     def compare_results(
         self,
@@ -485,10 +589,7 @@ class PerformanceAnalyzer:
         except json.JSONDecodeError:
             return None
 
-        if not isinstance(data, dict):
-            return None
-
-        return cast("dict[str, CriterionEstimate]", data)
+        return _validated_baseline_data(data, baseline_path=baseline_file)
 
     def _load_trend_baselines(self, cutoff_date: datetime) -> list[LoadedBaseline]:
         baselines: list[LoadedBaseline] = []
@@ -554,7 +655,10 @@ class PerformanceAnalyzer:
         baselines = self._load_trend_baselines(cutoff_date)
 
         if len(baselines) < 2:
-            return {"error": "Not enough historical data for trend analysis"}
+            error_result: TrendAnalysisError = {
+                "error": "Not enough historical data for trend analysis",
+            }
+            return error_result
 
         trends: dict[str, TrendInfo] = {}
         benchmark_names: set[str] = set()
@@ -573,11 +677,12 @@ class PerformanceAnalyzer:
 
             trends[benchmark] = self._compute_trend_info(values)
 
-        return {
+        success_result: TrendAnalysisSuccess = {
             "period_days": days,
             "baselines_analyzed": len(baselines),
             "trends": trends,
         }
+        return success_result
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -667,26 +772,28 @@ def _handle_trends(analyzer: PerformanceAnalyzer, days: int) -> int:
     print(f"📊 Analyzing performance trends over {days} days...")
     trends = analyzer.analyze_trends(days)
 
-    if "error" in trends:
-        error = cast("TrendAnalysisError", trends)["error"]
+    error = trends.get("error")
+    if isinstance(error, str):
         print(f"❌ {error}")
         return 1
 
-    print(f"Analyzed {trends['baselines_analyzed']} baselines over {trends['period_days']} days")
+    success = cast("TrendAnalysisSuccess", trends)
 
-    degrading = [name for name, trend in trends["trends"].items() if trend["trend"] == "degrading"]
-    improving = [name for name, trend in trends["trends"].items() if trend["trend"] == "improving"]
+    print(f"Analyzed {success['baselines_analyzed']} baselines over {success['period_days']} days")
+
+    degrading = [name for name, trend in success["trends"].items() if trend["trend"] == "degrading"]
+    improving = [name for name, trend in success["trends"].items() if trend["trend"] == "improving"]
 
     if degrading:
         print(f"\n🔴 Degrading trends ({len(degrading)} benchmarks):")
         for bench in degrading:
-            change = trends["trends"][bench]["change_percent"]
+            change = success["trends"][bench]["change_percent"]
             print(f"  {bench}: {change:+.1f}% over period")
 
     if improving:
         print(f"\n🟢 Improving trends ({len(improving)} benchmarks):")
         for bench in improving:
-            change = trends["trends"][bench]["change_percent"]
+            change = success["trends"][bench]["change_percent"]
             print(f"  {bench}: {change:+.1f}% over period")
 
     return 0

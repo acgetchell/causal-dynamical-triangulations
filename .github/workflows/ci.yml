@@ -22,6 +22,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.9"
+  UV_VERSION: "0.9.21"
 
 jobs:
   build:
@@ -61,7 +62,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867  # v7.1.6
         with:
-          version: "latest"
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Node.js (for markdownlint)
         if: matrix.os != 'windows-latest'

@@ -15,7 +15,9 @@ import pytest
 # Add scripts directory to path so we can import modules as top-level scripts/*.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from performance_analysis import PerformanceAnalyzer
+from typing import cast
+
+from performance_analysis import PerformanceAnalyzer, TrendAnalysisSuccess
 
 
 def _write_baseline(
@@ -80,7 +82,8 @@ def test_analyze_trends_classifies_improving_stable_degrading(tmp_path: Path) ->
     result = analyzer.analyze_trends(days=30)
     assert "error" not in result
 
-    trends = result["trends"]
+    success = cast("TrendAnalysisSuccess", result)
+    trends = success["trends"]
     assert trends["improving"]["trend"] == "improving"
     assert trends["degrading"]["trend"] == "degrading"
     assert trends["stable"]["trend"] == "stable"
@@ -111,7 +114,8 @@ def test_analyze_trends_parses_tagged_filenames_and_sorts_by_timestamp(tmp_path:
     result = analyzer.analyze_trends(days=30)
     assert "error" not in result
 
-    trend = result["trends"]["bench"]
+    success = cast("TrendAnalysisSuccess", result)
+    trend = success["trends"]["bench"]
     assert trend["first_value"] == pytest.approx(100.0)
     assert trend["last_value"] == pytest.approx(200.0)
     assert trend["trend"] == "degrading"
@@ -145,7 +149,8 @@ def test_analyze_trends_ignores_invalid_json_baselines(tmp_path: Path) -> None:
     result = analyzer.analyze_trends(days=30)
     assert "error" not in result
 
-    trend = result["trends"]["bench"]
+    success = cast("TrendAnalysisSuccess", result)
+    trend = success["trends"]["bench"]
     assert trend["first_value"] == pytest.approx(100.0)
     assert trend["last_value"] == pytest.approx(200.0)
     assert trend["trend"] == "degrading"
@@ -181,7 +186,8 @@ def test_analyze_trends_handles_benchmarks_missing_in_some_baselines(tmp_path: P
     result = analyzer.analyze_trends(days=30)
     assert "error" not in result
 
-    trends = result["trends"]
+    success = cast("TrendAnalysisSuccess", result)
+    trends = success["trends"]
 
     assert trends["always"]["trend"] == "stable"
     assert trends["always"]["change_percent"] == pytest.approx(0.0)
