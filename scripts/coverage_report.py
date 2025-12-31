@@ -19,7 +19,10 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 DEFAULT_REPORT = Path("tarpaulin-report.json")
 
@@ -31,11 +34,11 @@ class CoverageEntry:
     covered: int
     path: Path
 
-    def format(self, relative_to: Optional[Path] = None) -> str:
+    def format(self, relative_to: Path | None = None) -> str:
         display_path = self.relative_path(relative_to)
         return f"{self.coverage:6.2f}%  {display_path}"
 
-    def relative_path(self, relative_to: Optional[Path]) -> Path:
+    def relative_path(self, relative_to: Path | None) -> Path:
         if relative_to is None:
             return self.path
         try:
@@ -52,9 +55,7 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments including report path, prefix filter,
             result limit, and sort order flag.
     """
-    parser = argparse.ArgumentParser(
-        description="Summarize Tarpaulin JSON coverage report."
-    )
+    parser = argparse.ArgumentParser(description="Summarize Tarpaulin JSON coverage report.")
     parser.add_argument(
         "--report",
         type=Path,
@@ -64,10 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prefix",
         default="",
-        help=(
-            "Only include files whose (relative) path starts with this prefix. "
-            "Use empty string to include all."
-        ),
+        help=("Only include files whose (relative) path starts with this prefix. Use empty string to include all."),
     )
     parser.add_argument(
         "--limit",
@@ -121,21 +119,16 @@ def coverage_entries(data: dict) -> Iterable[CoverageEntry]:
         raw_path = entry.get("path")
         if not raw_path:
             continue
-        if isinstance(raw_path, (list, tuple)):
-            path = Path(*raw_path)
-        else:
-            path = Path(raw_path)
+        path = Path(*raw_path) if isinstance(raw_path, (list, tuple)) else Path(raw_path)
         coverage = (covered / coverable) * 100
-        yield CoverageEntry(
-            coverage=coverage, coverable=coverable, covered=covered, path=path
-        )
+        yield CoverageEntry(coverage=coverage, coverable=coverable, covered=covered, path=path)
 
 
 def filter_entries(
     entries: Iterable[CoverageEntry],
     prefix: str,
     relative_to: Path,
-) -> List[CoverageEntry]:
+) -> list[CoverageEntry]:
     """
     Reduce coverage entries to those matching a path prefix relative to the repo root.
 
@@ -150,7 +143,7 @@ def filter_entries(
     if not prefix:
         return list(entries)
     normalized_prefix = prefix if prefix.endswith("/") else f"{prefix}/"
-    filtered: List[CoverageEntry] = []
+    filtered: list[CoverageEntry] = []
     for entry in entries:
         relative = entry.relative_path(relative_to)
         relative_str = relative.as_posix()
@@ -178,9 +171,7 @@ def main() -> None:
         print(f"No coverable files found{prefix_message}.")
         return
 
-    sorted_entries = sorted(
-        filtered, key=lambda item: item.coverage, reverse=args.descending
-    )
+    sorted_entries = sorted(filtered, key=lambda item: item.coverage, reverse=args.descending)
     if args.limit is not None:
         sorted_entries = sorted_entries[: args.limit]
 

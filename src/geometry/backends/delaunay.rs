@@ -29,25 +29,45 @@
 //! The `GeometryBackend` trait has been designed WITHOUT `Send + Sync` requirements,
 //! allowing this backend to compile. An optional `ThreadSafeBackend` marker trait
 //! is available for backends that do support threading.
+// cspell:ignore vkey
 
 use crate::geometry::traits::{
     FlipResult, GeometryBackend, SubdivisionResult, TriangulationMut, TriangulationQuery,
 };
+use delaunay::core::delaunay_triangulation::DelaunayTriangulation;
+use delaunay::geometry::kernel::FastKernel;
+use delaunay::prelude::*;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-/// Delaunay backend wrapping the delaunay crate's Tds
+/// Delaunay backend wrapping the delaunay crate's triangulation (f64 coordinates)
 #[derive(Debug)]
-pub struct DelaunayBackend<T, VertexData, CellData, const D: usize>
+pub struct DelaunayBackend<VertexData, CellData, const D: usize>
 where
-    T: delaunay::geometry::CoordinateScalar + 'static,
-    VertexData: delaunay::core::DataType + 'static,
-    CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    VertexData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static,
+    CellData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static,
 {
-    /// The underlying triangulated data structure from delaunay crate
-    /// THIS IS THE ONLY PLACE IN THE ENTIRE CDT CODEBASE WHERE `delaunay::Tds` IS USED
-    tds: delaunay::core::Tds<T, VertexData, CellData, D>,
-    _phantom: PhantomData<(T, VertexData, CellData)>,
+    /// The underlying Delaunay triangulation from the delaunay crate
+    dt: Arc<DelaunayTriangulation<FastKernel<f64>, VertexData, CellData, D>>,
+    _phantom: PhantomData<(VertexData, CellData)>,
 }
 
 /// Opaque handle for vertices in Delaunay backend
@@ -85,44 +105,73 @@ pub enum DelaunayError {
     GeometryError(String),
 }
 
-impl<T, VertexData, CellData, const D: usize> DelaunayBackend<T, VertexData, CellData, D>
+impl<VertexData, CellData, const D: usize> DelaunayBackend<VertexData, CellData, D>
 where
-    T: delaunay::geometry::CoordinateScalar + 'static,
-    VertexData: delaunay::core::DataType + 'static,
-    CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    VertexData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static,
+    CellData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static,
 {
-    /// Create a new Delaunay backend from an existing Tds
+    /// Create a new Delaunay backend from an existing Delaunay triangulation
     #[must_use]
-    pub const fn from_tds(tds: delaunay::core::Tds<T, VertexData, CellData, D>) -> Self {
+    pub fn from_triangulation(
+        dt: DelaunayTriangulation<FastKernel<f64>, VertexData, CellData, D>,
+    ) -> Self {
         Self {
-            tds,
+            dt: Arc::new(dt),
             _phantom: PhantomData,
         }
     }
 
-    /// Get a reference to the underlying Tds (for migration purposes only)
+    /// Access the underlying Delaunay triangulation (read-only)
     #[must_use]
-    pub const fn tds(&self) -> &delaunay::core::Tds<T, VertexData, CellData, D> {
-        &self.tds
+    pub fn triangulation(
+        &self,
+    ) -> &DelaunayTriangulation<FastKernel<f64>, VertexData, CellData, D> {
+        &self.dt
     }
 
-    /// Get a mutable reference to the underlying Tds (for migration purposes only)
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn tds_mut(&mut self) -> &mut delaunay::core::Tds<T, VertexData, CellData, D> {
-        &mut self.tds
+    /// Get a reference to the underlying Tds (for migration purposes only)
+    #[must_use]
+    pub fn tds(&self) -> &delaunay::core::Tds<f64, VertexData, CellData, D> {
+        self.dt.tds()
+    }
+
+    #[inline]
+    fn vertex_key_from_handle(&self, handle: &DelaunayVertexHandle) -> Option<VertexKey> {
+        self.tds().vertex_key_from_uuid(&handle.id)
+    }
+
+    #[inline]
+    fn cell_key_from_handle(&self, handle: &DelaunayFaceHandle) -> Option<CellKey> {
+        self.tds().cell_key_from_uuid(&handle.id)
     }
 }
 
-impl<T, VertexData, CellData, const D: usize> GeometryBackend
-    for DelaunayBackend<T, VertexData, CellData, D>
+impl<VertexData, CellData, const D: usize> GeometryBackend
+    for DelaunayBackend<VertexData, CellData, D>
 where
-    T: delaunay::geometry::CoordinateScalar + 'static,
     VertexData: delaunay::core::DataType + 'static,
     CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    [f64; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
-    type Coordinate = T;
+    type Coordinate = f64;
     type VertexHandle = DelaunayVertexHandle;
     type EdgeHandle = DelaunayEdgeHandle;
     type FaceHandle = DelaunayFaceHandle;
@@ -133,16 +182,15 @@ where
     }
 }
 
-impl<T, VertexData, CellData, const D: usize> TriangulationQuery
-    for DelaunayBackend<T, VertexData, CellData, D>
+impl<VertexData, CellData, const D: usize> TriangulationQuery
+    for DelaunayBackend<VertexData, CellData, D>
 where
-    T: delaunay::geometry::CoordinateScalar + 'static,
     VertexData: delaunay::core::DataType + 'static,
     CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    [f64; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
     fn vertex_count(&self) -> usize {
-        self.tds.vertices().len()
+        self.dt.number_of_vertices()
     }
 
     /// Count edges in the triangulation.
@@ -153,12 +201,12 @@ where
     /// [`refresh_cache()`](crate::cdt::triangulation::CdtTriangulation::refresh_cache)
     /// method available on [`CdtTriangulation`](crate::cdt::triangulation::CdtTriangulation).
     fn edge_count(&self) -> usize {
-        // Use the canonical edge counting implementation
-        count_edges_in_tds(&self.tds)
+        // Use canonical edge counting to avoid double-counting shared facets.
+        count_edges_in_tds(self.dt.tds())
     }
 
     fn face_count(&self) -> usize {
-        self.tds.cells().len()
+        self.dt.number_of_cells()
     }
 
     fn dimension(&self) -> usize {
@@ -167,44 +215,39 @@ where
 
     fn vertices(&self) -> Box<dyn Iterator<Item = Self::VertexHandle> + '_> {
         Box::new(
-            self.tds
+            self.dt
+                .tds()
                 .vertices()
-                .iter()
                 .map(|(_, v)| DelaunayVertexHandle { id: v.uuid() }),
         )
     }
 
     fn edges(&self) -> Box<dyn Iterator<Item = Self::EdgeHandle> + '_> {
-        // Collect all unique edges using the same logic as edge_count
-        let mut unique_edges = std::collections::HashMap::new();
-        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
+        let mut seen = std::collections::HashSet::new();
+        let mut handles = Vec::new();
 
-        for (idx, facet_view) in all_facets.enumerate() {
+        for (idx, facet_view) in self.dt.facets().enumerate() {
             if let Ok(vertices_iter) = facet_view.vertices() {
                 let vertices: Vec<_> = vertices_iter.collect();
                 if vertices.len() == 2 {
-                    let uuid1 = vertices[0].uuid();
-                    let uuid2 = vertices[1].uuid();
-                    let mut edge = [uuid1, uuid2];
+                    let mut edge = [vertices[0].uuid(), vertices[1].uuid()];
                     edge.sort();
-                    // Store the first index we see for each unique edge
-                    unique_edges.entry(edge).or_insert(idx);
+                    if seen.insert(edge) {
+                        handles.push(DelaunayEdgeHandle { id: idx });
+                    }
                 }
             }
         }
 
-        Box::new(
-            unique_edges
-                .into_values()
-                .map(|id| DelaunayEdgeHandle { id }),
-        )
+        handles.sort_by_key(|h| h.id);
+        Box::new(handles.into_iter())
     }
 
     fn faces(&self) -> Box<dyn Iterator<Item = Self::FaceHandle> + '_> {
         Box::new(
-            self.tds
+            self.dt
+                .tds()
                 .cells()
-                .iter()
                 .map(|(_, c)| DelaunayFaceHandle { id: c.uuid() }),
         )
     }
@@ -214,14 +257,13 @@ where
         vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::Coordinate>, Self::Error> {
         log::trace!("vertex_coordinates: searching for vertex {}", vertex.id);
-
-        // Find the vertex in the Tds by UUID
+        let vkey = self
+            .vertex_key_from_handle(vertex)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
         let v = self
-            .tds
-            .vertices()
-            .iter()
-            .find(|(_, v)| v.uuid() == vertex.id)
-            .map(|(_, v)| v)
+            .dt
+            .tds()
+            .get_vertex_by_key(vkey)
             .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
 
         log::trace!("vertex_coordinates: found vertex {}", vertex.id);
@@ -241,24 +283,24 @@ where
         &self,
         face: &Self::FaceHandle,
     ) -> Result<Vec<Self::VertexHandle>, Self::Error> {
-        // Find the cell in the Tds by UUID
+        let cell_key = self
+            .cell_key_from_handle(face)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
         let cell = self
-            .tds
-            .cells()
-            .iter()
-            .find(|(_, c)| c.uuid() == face.id)
-            .map(|(_, c)| c)
+            .dt
+            .tds()
+            .get_cell(cell_key)
             .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
 
-        // Get vertices from the cell using the vertices() method
-        // Phase 3A: vertices() now returns VertexKeys, need to look up UUIDs via TDS
-        let vertices = cell
-            .vertices()
-            .iter()
-            .map(|&vkey| DelaunayVertexHandle {
-                id: self.tds.vertices()[vkey].uuid(),
-            })
-            .collect();
+        let mut vertices = Vec::new();
+        for &vkey in cell.vertices() {
+            let v = self
+                .dt
+                .tds()
+                .get_vertex_by_key(vkey)
+                .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
+            vertices.push(DelaunayVertexHandle { id: v.uuid() });
+        }
 
         Ok(vertices)
     }
@@ -267,10 +309,7 @@ where
         &self,
         edge: &Self::EdgeHandle,
     ) -> Result<(Self::VertexHandle, Self::VertexHandle), Self::Error> {
-        // Find the edge by iterating through facets
-        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
-
-        for (idx, facet_view) in all_facets.enumerate() {
+        for (idx, facet_view) in self.dt.facets().enumerate() {
             if idx == edge.id
                 && let Ok(vertices_iter) = facet_view.vertices()
             {
@@ -295,17 +334,13 @@ where
         &self,
         vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::FaceHandle>, Self::Error> {
-        // Find all cells that contain this vertex
-        let mut adjacent = Vec::new();
+        let vkey = self
+            .vertex_key_from_handle(vertex)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Vertex not found".to_string()))?;
 
-        for (_, cell) in self.tds.cells() {
-            // Check if this cell contains the vertex by checking its vertices
-            // Phase 3A: vertices() now returns VertexKeys, need to look up UUIDs via TDS
-            if cell
-                .vertices()
-                .iter()
-                .any(|&vkey| self.tds.vertices()[vkey].uuid() == vertex.id)
-            {
+        let mut adjacent = Vec::new();
+        for (_, cell) in self.dt.tds().cells() {
+            if cell.contains_vertex(vkey) {
                 adjacent.push(DelaunayFaceHandle { id: cell.uuid() });
             }
         }
@@ -318,9 +353,8 @@ where
         vertex: &Self::VertexHandle,
     ) -> Result<Vec<Self::EdgeHandle>, Self::Error> {
         // Find all edges that contain this vertex
-        // Use a HashMap to track unique edges and their first occurrence index
         let mut unique_edges = std::collections::HashMap::new();
-        let all_facets = delaunay::core::facet::AllFacetsIter::new(&self.tds);
+        let all_facets = self.dt.facets();
 
         for (idx, facet_view) in all_facets.enumerate() {
             if let Ok(vertices_iter) = facet_view.vertices() {
@@ -349,22 +383,24 @@ where
         &self,
         face: &Self::FaceHandle,
     ) -> Result<Vec<Self::FaceHandle>, Self::Error> {
-        // Find the cell in the Tds by UUID
+        let cell_key = self
+            .cell_key_from_handle(face)
+            .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
         let cell = self
-            .tds
-            .cells()
-            .iter()
-            .find(|(_, c)| c.uuid() == face.id)
-            .map(|(_, c)| c)
+            .tds()
+            .get_cell(cell_key)
             .ok_or_else(|| DelaunayError::InvalidHandle("Face not found".to_string()))?;
 
         // Get neighbors from the cell's neighbors() method
         // Phase 3A: neighbors() now returns CellKeys, need to look up UUIDs via TDS
         let mut neighbors = Vec::new();
         if let Some(neighbor_keys) = cell.neighbors() {
-            for neighbor_key in neighbor_keys.iter().flatten() {
-                let neighbor_uuid = self.tds.cells()[*neighbor_key].uuid();
-                neighbors.push(DelaunayFaceHandle { id: neighbor_uuid });
+            for neighbor_key in neighbor_keys.iter().copied().flatten() {
+                if let Some(neighbor_cell) = self.dt.tds().get_cell(neighbor_key) {
+                    neighbors.push(DelaunayFaceHandle {
+                        id: neighbor_cell.uuid(),
+                    });
+                }
             }
         }
 
@@ -372,18 +408,16 @@ where
     }
 
     fn is_valid(&self) -> bool {
-        // Basic validation: check that the triangulation has vertices and cells
-        !self.tds.vertices().is_empty() && !self.tds.cells().is_empty()
+        self.dt.is_valid().is_ok()
     }
 }
 
-impl<T, VertexData, CellData, const D: usize> TriangulationMut
-    for DelaunayBackend<T, VertexData, CellData, D>
+impl<VertexData, CellData, const D: usize> TriangulationMut
+    for DelaunayBackend<VertexData, CellData, D>
 where
-    T: delaunay::geometry::CoordinateScalar + 'static,
     VertexData: delaunay::core::DataType + 'static,
     CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    [f64; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
     fn insert_vertex(
         &mut self,
@@ -456,29 +490,41 @@ where
 }
 
 // Additional implementation for types that support full Delaunay validation
-impl<T, VertexData, CellData, const D: usize> DelaunayBackend<T, VertexData, CellData, D>
+impl<VertexData, CellData, const D: usize> DelaunayBackend<VertexData, CellData, D>
 where
-    T: delaunay::geometry::CoordinateScalar
-        + std::ops::AddAssign
-        + std::ops::SubAssign
-        + std::iter::Sum
+    VertexData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
         + 'static,
-    VertexData: delaunay::core::DataType + 'static,
-    CellData: delaunay::core::DataType + 'static,
-    [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
-    for<'a> &'a T: std::ops::Div<T, Output = T>,
+    CellData: delaunay::core::DataType
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + Eq
+        + Ord
+        + std::hash::Hash
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static,
+    [f64; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
     /// Check if the triangulation satisfies the Delaunay property using `Tds::is_valid()`
     /// This method is only available for types that satisfy the necessary trait bounds
     #[must_use]
     pub fn is_delaunay(&self) -> bool {
         // Tds::is_valid() returns Result<(), TriangulationValidationError>
-        self.tds.is_valid().is_ok()
+        self.dt.is_valid().is_ok()
     }
 }
 
 /// Type alias for common 2D Delaunay backend
-pub type DelaunayBackend2D = DelaunayBackend<f64, i32, i32, 2>;
+pub type DelaunayBackend2D = DelaunayBackend<i32, i32, 2>;
 
 /// Counts edges in any Tds structure using a consistent algorithm.
 /// This is the canonical edge counting implementation used throughout the codebase.
@@ -492,7 +538,7 @@ where
     CellData: delaunay::core::DataType,
     [T; D]: serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
-    if tds.vertices().len() < 2 || tds.cells().is_empty() {
+    if tds.number_of_vertices() < 2 || tds.number_of_cells() == 0 {
         return 0;
     }
 
@@ -530,8 +576,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_on_valid_triangulation() {
         // Create a simple valid Delaunay triangulation using the existing utility
-        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         // Test the specialized is_delaunay method
         assert!(
@@ -543,8 +589,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_via_trait() {
         // Create a simple valid Delaunay triangulation
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         // Test is_delaunay through the TriangulationOps trait
         assert!(
@@ -556,8 +602,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_with_multiple_points() {
         // Create a triangulation with more points
-        let tds = crate::util::generate_random_delaunay2(10, (0.0, 100.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(10, (0.0, 100.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         assert!(
             backend.is_delaunay(),
@@ -568,8 +614,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_with_many_points() {
         // Create a larger triangulation
-        let tds = crate::util::generate_random_delaunay2(20, (0.0, 50.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(20, (0.0, 50.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         assert!(
             backend.is_delaunay(),
@@ -580,8 +626,8 @@ mod tests {
     #[test]
     fn test_is_valid_basic() {
         // Test the basic is_valid implementation
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         assert!(
             backend.is_valid(),
@@ -594,8 +640,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_consistency() {
         // Test that is_delaunay and is_valid are consistent for valid triangulations
-        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let is_valid = backend.is_valid();
         let is_delaunay = backend.is_delaunay();
@@ -610,8 +656,8 @@ mod tests {
     #[test]
     fn test_is_delaunay_minimal_triangulation() {
         // Test with minimal triangulation (3 vertices)
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         assert!(backend.is_valid(), "Minimal triangulation should be valid");
         assert!(
@@ -630,8 +676,8 @@ mod tests {
 
     #[test]
     fn test_vertices_iterator() {
-        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let vertices: Vec<_> = backend.vertices().collect();
         assert_eq!(
@@ -654,8 +700,8 @@ mod tests {
 
     #[test]
     fn test_edges_iterator() {
-        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let edges: Vec<_> = backend.edges().collect();
         assert_eq!(
@@ -675,8 +721,8 @@ mod tests {
 
     #[test]
     fn test_faces_iterator() {
-        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let faces: Vec<_> = backend.faces().collect();
         assert_eq!(
@@ -698,8 +744,8 @@ mod tests {
 
     #[test]
     fn test_vertex_coordinates() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let vertices: Vec<_> = backend.vertices().collect();
         assert!(!vertices.is_empty(), "Should have at least one vertex");
@@ -718,8 +764,8 @@ mod tests {
 
     #[test]
     fn test_vertex_coordinates_invalid_handle() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let invalid_handle = DelaunayVertexHandle {
             id: uuid::Uuid::new_v4(),
@@ -730,8 +776,8 @@ mod tests {
 
     #[test]
     fn test_face_vertices() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let faces: Vec<_> = backend.faces().collect();
         assert!(!faces.is_empty(), "Should have at least one face");
@@ -757,8 +803,8 @@ mod tests {
 
     #[test]
     fn test_face_vertices_invalid_handle() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let invalid_handle = DelaunayFaceHandle {
             id: uuid::Uuid::new_v4(),
@@ -769,8 +815,8 @@ mod tests {
 
     #[test]
     fn test_edge_endpoints() {
-        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let edges: Vec<_> = backend.edges().collect();
         assert!(!edges.is_empty(), "Should have at least one edge");
@@ -796,8 +842,8 @@ mod tests {
 
     #[test]
     fn test_edge_endpoints_invalid_handle() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let invalid_handle = DelaunayEdgeHandle { id: 999_999 };
         let result = backend.edge_endpoints(&invalid_handle);
@@ -806,8 +852,8 @@ mod tests {
 
     #[test]
     fn test_adjacent_faces() {
-        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let vertices: Vec<_> = backend.vertices().collect();
         assert!(!vertices.is_empty(), "Should have at least one vertex");
@@ -836,8 +882,8 @@ mod tests {
 
     #[test]
     fn test_incident_edges() {
-        let tds = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(4, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let vertices: Vec<_> = backend.vertices().collect();
         assert!(!vertices.is_empty(), "Should have at least one vertex");
@@ -866,8 +912,8 @@ mod tests {
 
     #[test]
     fn test_face_neighbors() {
-        let tds = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(5, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let faces: Vec<_> = backend.faces().collect();
         assert!(!faces.is_empty(), "Should have at least one face");
@@ -896,8 +942,8 @@ mod tests {
 
     #[test]
     fn test_face_neighbors_invalid_handle() {
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let invalid_handle = DelaunayFaceHandle {
             id: uuid::Uuid::new_v4(),
@@ -910,14 +956,14 @@ mod tests {
     fn test_topology_consistency() {
         // Test that topology is consistent across different query methods
         // Use a fixed seed for reproducibility and to avoid random topology issues
-        let tds = delaunay::geometry::util::generate_random_triangulation::<f64, i32, i32, 2>(
+        let dt = delaunay::geometry::util::generate_random_triangulation::<f64, i32, i32, 2>(
             6,
             (0.0, 10.0),
             None,
             Some(42),
         )
         .expect("Failed to generate triangulation with fixed seed");
-        let backend = DelaunayBackend::from_tds(tds);
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         let vertex_count = backend.vertex_count();
         let edge_count = backend.edge_count();
@@ -951,8 +997,8 @@ mod tests {
     #[test]
     fn test_minimal_triangulation_queries() {
         // Test with minimal valid triangulation (3 vertices, 1 face)
-        let tds = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
-        let backend = DelaunayBackend::from_tds(tds);
+        let dt = crate::util::generate_random_delaunay2(3, (0.0, 10.0));
+        let backend = DelaunayBackend::from_triangulation(dt);
 
         // Test all vertices are accessible
         let vertices: Vec<_> = backend.vertices().collect();

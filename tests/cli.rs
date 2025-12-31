@@ -9,7 +9,7 @@ use std::process::Command;
 
 #[test]
 fn exit_success() {
-    let mut cmd = Command::cargo_bin("cdt").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
     cmd.arg("-v");
     cmd.arg("32");
     cmd.arg("-t");
@@ -18,8 +18,8 @@ fn exit_success() {
 }
 
 #[test]
-fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt")?;
+fn cdt_cli_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -30,24 +30,20 @@ fn cdt_cli_args() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert()
         .success()
         .stderr(predicate::str::contains("faces"));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt")?;
+fn cdt_cli_no_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.assert().failure().stderr(predicate::str::contains(
         "error: the following required arguments were not provided:",
     ));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_invalid_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt")?;
+fn cdt_cli_invalid_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -59,13 +55,11 @@ fn cdt_cli_invalid_args() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert().failure().stderr(predicate::str::contains(
         "error: invalid value '5' for '--dimension <DIMENSION>': 5 is not in 2..4",
     ));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt")?;
+fn cdt_cli_out_of_range_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("-v");
     cmd.arg("32");
@@ -77,15 +71,13 @@ fn cdt_cli_out_of_range_args() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("Unsupported dimension: 3"));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_invalid_measurement_frequency_zero() -> Result<(), Box<dyn std::error::Error>> {
+fn cdt_cli_invalid_measurement_frequency_zero() {
     // Note: This would be caught by clap's range validation now,
     // but we test the error message for completeness
-    let mut cmd = Command::cargo_bin("cdt")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");
@@ -94,13 +86,11 @@ fn cdt_cli_invalid_measurement_frequency_zero() -> Result<(), Box<dyn std::error
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("0 is not in 1.."));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_invalid_measurement_frequency_too_large() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("cdt")?;
+fn cdt_cli_invalid_measurement_frequency_too_large() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");
@@ -111,14 +101,12 @@ fn cdt_cli_invalid_measurement_frequency_too_large() -> Result<(), Box<dyn std::
     cmd.assert().failure().stderr(predicate::str::contains(
         "Measurement frequency cannot be greater than total steps",
     ));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_invalid_vertices_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn cdt_cli_invalid_vertices_too_few() {
     // This should be caught by clap's range validation
-    let mut cmd = Command::cargo_bin("cdt")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("--vertices").arg("2");
     cmd.arg("--timeslices").arg("3");
@@ -126,14 +114,12 @@ fn cdt_cli_invalid_vertices_too_few() -> Result<(), Box<dyn std::error::Error>> 
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("2 is not in 3.."));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_invalid_timeslices_zero() -> Result<(), Box<dyn std::error::Error>> {
+fn cdt_cli_invalid_timeslices_zero() {
     // This should be caught by clap's range validation
-    let mut cmd = Command::cargo_bin("cdt")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("0");
@@ -141,14 +127,12 @@ fn cdt_cli_invalid_timeslices_zero() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("0 is not in 1.."));
-
-    Ok(())
 }
 
 #[test]
-fn cdt_cli_config_validation_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn cdt_cli_config_validation_comprehensive() {
     // Test a complex scenario with valid parameters to ensure our validation doesn't break normal usage
-    let mut cmd = Command::cargo_bin("cdt")?;
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cdt"));
 
     cmd.arg("--vertices").arg("10");
     cmd.arg("--timeslices").arg("3");
@@ -159,6 +143,4 @@ fn cdt_cli_config_validation_comprehensive() -> Result<(), Box<dyn std::error::E
     cmd.env("RUST_LOG", "error"); // Reduce log noise
 
     cmd.assert().success();
-
-    Ok(())
 }

@@ -1,18 +1,33 @@
-"""
-Advanced performance analysis and reporting for CDT benchmarks.
+#!/usr/bin/env python3
+"""Advanced performance analysis and reporting for CDT benchmarks.
+
 Provides detailed statistics, trend analysis, and regression detection.
+
+Requires Python 3.11+ for PEP 604 union types and datetime.UTC.
 """
 
-import json
-import sys
 import argparse
+import json
 import math
-import statistics
 import shutil
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, Optional
+import statistics
 import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+try:
+    # When executed as a script from scripts/
+    from subprocess_utils import (  # type: ignore[no-redef,import-not-found]
+        ExecutableNotFoundError,
+        run_cargo_command,
+    )
+except ModuleNotFoundError:
+    # When imported as a module (e.g., scripts.performance_analysis)
+    from scripts.subprocess_utils import (  # type: ignore[no-redef,import-not-found]
+        ExecutableNotFoundError,
+        run_cargo_command,
+    )
 
 
 class PerformanceAnalyzer:
@@ -32,11 +47,10 @@ class PerformanceAnalyzer:
         """Run cargo bench and return success status."""
         print("🏃 Running benchmarks...")
         try:
-            result = subprocess.run(
-                ["cargo", "bench", "--message-format=json"],
+            result = run_cargo_command(
+                ["bench", "--message-format=json"],
                 cwd=self.project_root,
-                capture_output=True,
-                text=True,
+                check=False,
                 timeout=600,  # 10 minute timeout
             )
 
@@ -48,14 +62,17 @@ class PerformanceAnalyzer:
             print("✅ Benchmarks completed successfully")
             return True
 
+        except ExecutableNotFoundError as exc:
+            print(f"❌ {exc}")
+            return False
         except subprocess.TimeoutExpired:
             print("❌ Benchmark execution timed out")
             return False
-        except Exception as e:
-            print(f"❌ Error running benchmarks: {e}")
+        except Exception as exc:
+            print(f"❌ Error running benchmarks: {exc}")
             return False
 
-    def extract_criterion_results(self) -> Dict:
+    def extract_criterion_results(self) -> dict:
         """Extract benchmark results from criterion output directory."""
         results = {}
 
@@ -74,9 +91,7 @@ class PerformanceAnalyzer:
                 # Build benchmark name from path structure
                 # e.g., action_calculations/calculate_action/50/base/estimates.json
                 # becomes "action_calculations/calculate_action/50"
-                path_parts = estimates_file.relative_to(self.results_dir).parts[
-                    :-2
-                ]  # Remove '<run_type>/estimates.json'
+                path_parts = estimates_file.relative_to(self.results_dir).parts[:-2]  # Remove '<run_type>/estimates.json'
                 benchmark_name = "/".join(path_parts)
 
                 results[benchmark_name] = {
@@ -84,31 +99,24 @@ class PerformanceAnalyzer:
                     "std_dev_ns": data.get("std_dev", {}).get("point_estimate", 0),
                     "median_ns": data.get("median", {}).get("point_estimate", 0),
                     "mad_ns": data.get("median_abs_dev", {}).get("point_estimate", 0),
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
                 }
 
                 # Add confidence intervals if available
                 mean_ci = data.get("mean", {}).get("confidence_interval", {})
                 if mean_ci:
-                    results[benchmark_name]["mean_ci_lower"] = mean_ci.get(
-                        "lower_bound", 0
-                    )
-                    results[benchmark_name]["mean_ci_upper"] = mean_ci.get(
-                        "upper_bound", 0
-                    )
+                    results[benchmark_name]["mean_ci_lower"] = mean_ci.get("lower_bound", 0)
+                    results[benchmark_name]["mean_ci_upper"] = mean_ci.get("upper_bound", 0)
 
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Warning: Could not parse {estimates_file}: {e}")
 
         return results
 
-    def save_baseline(self, results: Dict, tag: Optional[str] = None) -> Path:
+    def save_baseline(self, results: dict, tag: str | None = None) -> Path:
         """Save current results as a baseline."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if tag:
-            filename = f"baseline_{tag}_{timestamp}.json"
-        else:
-            filename = f"baseline_{timestamp}.json"
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        filename = f"baseline_{tag}_{timestamp}.json" if tag else f"baseline_{timestamp}.json"
 
         baseline_file = self.baseline_dir / filename
         with open(baseline_file, "w") as f:
@@ -130,7 +138,7 @@ class PerformanceAnalyzer:
         print(f"✅ Saved baseline: {baseline_file}")
         return baseline_file
 
-    def load_baseline(self, baseline_path: Optional[Path] = None) -> Dict:
+    def load_baseline(self, baseline_path: Path | None = None) -> dict:
         """Load baseline results."""
         if baseline_path is None:
             baseline_path = self.baseline_dir / "latest.json"
@@ -145,9 +153,7 @@ class PerformanceAnalyzer:
             print(f"Warning: Could not load baseline {baseline_path}: {e}")
             return {}
 
-    def compare_results(
-        self, current: Dict, baseline: Dict, threshold: float = 10.0
-    ) -> Dict:
+    def compare_results(self, current: dict, baseline: dict, threshold: float = 10.0) -> dict:
         """Compare current results with baseline and categorize changes."""
         comparison = {
             "regressions": [],
@@ -159,9 +165,7 @@ class PerformanceAnalyzer:
 
         for benchmark, current_data in current.items():
             if benchmark not in baseline:
-                comparison["new_benchmarks"].append(
-                    {"benchmark": benchmark, "mean_ns": current_data["mean_ns"]}
-                )
+                comparison["new_benchmarks"].append({"benchmark": benchmark, "mean_ns": current_data["mean_ns"]})
                 continue
 
             current_mean = current_data["mean_ns"]
@@ -189,14 +193,7 @@ class PerformanceAnalyzer:
                 comparison["stable"].append(change_data)
 
         # Calculate summary statistics
-        all_changes = [
-            item["change_percent"]
-            for item in (
-                comparison["regressions"]
-                + comparison["improvements"]
-                + comparison["stable"]
-            )
-        ]
+        all_changes = [item["change_percent"] for item in (comparison["regressions"] + comparison["improvements"] + comparison["stable"])]
 
         if all_changes:
             comparison["summary"] = {
@@ -207,9 +204,7 @@ class PerformanceAnalyzer:
                 "new": len(comparison["new_benchmarks"]),
                 "avg_change": statistics.mean(all_changes),
                 "median_change": statistics.median(all_changes),
-                "max_regression": max(
-                    [r["change_percent"] for r in comparison["regressions"]], default=0
-                ),
+                "max_regression": max([r["change_percent"] for r in comparison["regressions"]], default=0),
                 "max_improvement": max(
                     (abs(i["change_percent"]) for i in comparison["improvements"]),
                     default=0,
@@ -222,14 +217,13 @@ class PerformanceAnalyzer:
         """Format nanoseconds into human-readable time units."""
         if nanoseconds < 1000:
             return f"{nanoseconds:.1f}ns"
-        elif nanoseconds < 1_000_000:
+        if nanoseconds < 1_000_000:
             return f"{nanoseconds / 1000:.1f}µs"
-        elif nanoseconds < 1_000_000_000:
+        if nanoseconds < 1_000_000_000:
             return f"{nanoseconds / 1_000_000:.1f}ms"
-        else:
-            return f"{nanoseconds / 1_000_000_000:.2f}s"
+        return f"{nanoseconds / 1_000_000_000:.2f}s"
 
-    def print_comparison_results(self, comparison: Dict):
+    def print_comparison_results(self, comparison: dict):
         """Print comparison results to console with colors."""
         summary = comparison.get("summary", {})
 
@@ -285,38 +279,42 @@ class PerformanceAnalyzer:
                 print(f"  Max improvement: +{summary['max_improvement']:.1f}%")
             print()
 
-        if (
-            not comparison["regressions"]
-            and not comparison["improvements"]
-            and not comparison["new_benchmarks"]
-        ):
+        if not comparison["regressions"] and not comparison["improvements"] and not comparison["new_benchmarks"]:
             print("✅ No significant performance changes detected")
 
-    def generate_report(
-        self, comparison: Dict, output_file: Optional[Path] = None
-    ) -> str:
+    def generate_report(self, comparison: dict, output_file: Path | None = None) -> str:
         """Generate a detailed performance report."""
-        lines = []
-        lines.append("# CDT Performance Analysis Report")
-        lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("")
+        generated_at = datetime.now(UTC).isoformat(timespec="seconds")
+        lines: list[str] = [
+            "# CDT Performance Analysis Report",
+            f"Generated: {generated_at}",
+            "",
+        ]
 
         summary = comparison.get("summary", {})
         if summary:
-            lines.append("## Summary")
-            lines.append(f"- Total benchmarks: {summary['total_benchmarks']}")
-            lines.append(f"- Regressions: {summary['regressions']}")
-            lines.append(f"- Improvements: {summary['improvements']}")
-            lines.append(f"- Stable: {summary['stable']}")
-            lines.append(f"- New benchmarks: {summary['new']}")
-            lines.append(f"- Average change: {summary['avg_change']:.1f}%")
-            lines.append(f"- Median change: {summary['median_change']:.1f}%")
-            lines.append("")
+            lines.extend(
+                [
+                    "## Summary",
+                    f"- Total benchmarks: {summary['total_benchmarks']}",
+                    f"- Regressions: {summary['regressions']}",
+                    f"- Improvements: {summary['improvements']}",
+                    f"- Stable: {summary['stable']}",
+                    f"- New benchmarks: {summary['new']}",
+                    f"- Average change: {summary['avg_change']:.1f}%",
+                    f"- Median change: {summary['median_change']:.1f}%",
+                    "",
+                ]
+            )
 
         if comparison["regressions"]:
-            lines.append("## 🔴 Performance Regressions")
-            lines.append("| Benchmark | Change | Current | Baseline | Ratio |")
-            lines.append("|-----------|--------|---------|----------|-------|")
+            lines.extend(
+                [
+                    "## 🔴 Performance Regressions",
+                    "| Benchmark | Change | Current | Baseline | Ratio |",
+                    "|-----------|--------|---------|----------|-------|",
+                ]
+            )
 
             for reg in sorted(
                 comparison["regressions"],
@@ -325,22 +323,20 @@ class PerformanceAnalyzer:
             ):
                 current_time = self.format_time_ns(reg["current_ns"])
                 baseline_time = self.format_time_ns(reg["baseline_ns"])
-                ratio = (
-                    reg["current_ns"] / reg["baseline_ns"]
-                    if reg["baseline_ns"] != 0
-                    else float("inf")
-                )
+                ratio = reg["current_ns"] / reg["baseline_ns"] if reg["baseline_ns"] != 0 else float("inf")
                 ratio_display = "∞" if math.isinf(ratio) else f"{ratio:.2f}"
 
-                lines.append(
-                    f"| {reg['benchmark']} | +{reg['change_percent']:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |"
-                )
+                lines.append(f"| {reg['benchmark']} | +{reg['change_percent']:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |")
             lines.append("")
 
         if comparison["improvements"]:
-            lines.append("## 🟢 Performance Improvements")
-            lines.append("| Benchmark | Change | Current | Baseline | Ratio |")
-            lines.append("|-----------|--------|---------|----------|-------|")
+            lines.extend(
+                [
+                    "## 🟢 Performance Improvements",
+                    "| Benchmark | Change | Current | Baseline | Ratio |",
+                    "|-----------|--------|---------|----------|-------|",
+                ]
+            )
 
             for imp in sorted(
                 comparison["improvements"],
@@ -349,17 +345,11 @@ class PerformanceAnalyzer:
             ):
                 current_time = self.format_time_ns(imp["current_ns"])
                 baseline_time = self.format_time_ns(imp["baseline_ns"])
-                ratio = (
-                    imp["baseline_ns"] / imp["current_ns"]
-                    if imp["current_ns"] != 0
-                    else float("inf")
-                )
+                ratio = imp["baseline_ns"] / imp["current_ns"] if imp["current_ns"] != 0 else float("inf")
                 ratio_display = "∞" if math.isinf(ratio) else f"{ratio:.2f}"
                 improvement_pct = abs(imp["change_percent"])
 
-                lines.append(
-                    f"| {imp['benchmark']} | -{improvement_pct:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |"
-                )
+                lines.append(f"| {imp['benchmark']} | -{improvement_pct:.1f}% | {current_time} | {baseline_time} | {ratio_display}x |")
             lines.append("")
 
         if comparison["new_benchmarks"]:
@@ -370,11 +360,13 @@ class PerformanceAnalyzer:
             lines.append("")
 
         if comparison["stable"]:
-            lines.append("## ✅ Stable Benchmarks")
-            lines.append(
-                f"No significant changes detected in {len(comparison['stable'])} benchmarks."
+            lines.extend(
+                [
+                    "## ✅ Stable Benchmarks",
+                    f"No significant changes detected in {len(comparison['stable'])} benchmarks.",
+                    "",
+                ]
             )
-            lines.append("")
 
         report_content = "\n".join(lines)
 
@@ -385,20 +377,17 @@ class PerformanceAnalyzer:
 
         return report_content
 
-    def analyze_trends(self, days: int = 30) -> Dict:
+    def analyze_trends(self, days: int = 30) -> dict:
         """Analyze performance trends over the specified number of days."""
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
         baselines = []
 
         for baseline_file in self.baseline_dir.glob("baseline_*.json"):
             # Extract timestamp from filename
             try:
-                timestamp_str = (
-                    baseline_file.stem.split("_")[-2]
-                    + "_"
-                    + baseline_file.stem.split("_")[-1]
-                )
-                timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                timestamp_str = baseline_file.stem.split("_")[-2] + "_" + baseline_file.stem.split("_")[-1]
+                # Baseline filenames do not encode a timezone; treat them as UTC.
+                timestamp = datetime.strptime(f"{timestamp_str}+0000", "%Y%m%d_%H%M%S%z")
 
                 if timestamp >= cutoff_date:
                     with open(baseline_file) as f:
@@ -442,29 +431,18 @@ class PerformanceAnalyzer:
                 sum_xx = sum(i * i for i in range(n))
 
                 denominator = n * sum_xx - sum_x * sum_x
-                if denominator == 0:
-                    # All data points at same position - treat as stable
-                    slope = 0
-                else:
-                    slope = (n * sum_xy - sum_x * sum_y) / denominator
+                # All data points at same position - treat as stable
+                slope = 0 if denominator == 0 else (n * sum_xy - sum_x * sum_y) / denominator
 
                 # Use small epsilon for floating point comparison
                 epsilon = 1e-9
                 trends[benchmark] = {
                     "slope": slope,
-                    "trend": "improving"
-                    if slope < 0
-                    else "degrading"
-                    if slope > 0
-                    else "stable",
+                    "trend": "improving" if slope < 0 else "degrading" if slope > 0 else "stable",
                     "data_points": n,
                     "first_value": values[0],
                     "last_value": values[-1],
-                    "change_percent": (
-                        ((values[-1] - values[0]) / values[0]) * 100
-                        if abs(values[0]) > epsilon
-                        else 0
-                    ),
+                    "change_percent": (((values[-1] - values[0]) / values[0]) * 100 if abs(values[0]) > epsilon else 0),
                 }
 
         return {
@@ -474,7 +452,7 @@ class PerformanceAnalyzer:
         }
 
 
-def main():
+def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="CDT Performance Analysis Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -482,26 +460,24 @@ def main():
 Examples:
   # Run benchmarks and compare with baseline (equivalent to check_performance.sh)
   ./performance_analysis.py
-  
+
   # Save current results as baseline
   ./performance_analysis.py --save-baseline
-  
+
   # Save baseline with tag
   ./performance_analysis.py --save-baseline --tag "v1.0.0"
-  
+
   # Compare with custom threshold
   ./performance_analysis.py --threshold 5.0
-  
+
   # Generate detailed report
   ./performance_analysis.py --report performance_report.md
-  
+
   # Analyze trends over last 7 days
   ./performance_analysis.py --trends 7
         """,
     )
-    parser.add_argument(
-        "--save-baseline", action="store_true", help="Save current results as baseline"
-    )
+    parser.add_argument("--save-baseline", action="store_true", help="Save current results as baseline")
     parser.add_argument("--tag", help="Tag for saved baseline")
     parser.add_argument(
         "--threshold",
@@ -510,110 +486,120 @@ Examples:
         help="Regression threshold percentage (default: 10.0)",
     )
     parser.add_argument("--compare", help="Compare with specific baseline file")
-    parser.add_argument(
-        "--project-root", type=Path, help="Path to the project root directory"
-    )
+    parser.add_argument("--project-root", type=Path, help="Path to the project root directory")
     parser.add_argument("--report", help="Generate detailed report to specified file")
-    parser.add_argument(
-        "--trends", type=int, metavar="DAYS", help="Analyze trends over N days"
-    )
+    parser.add_argument("--trends", type=int, metavar="DAYS", help="Analyze trends over N days")
     parser.add_argument(
         "--no-run",
         action="store_true",
         help="Skip running benchmarks, use existing results",
     )
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    return parser
 
-    args = parser.parse_args()
 
-    project_root: Optional[Path] = None
+def _find_project_root(provided: Path | None) -> Path:
+    if provided is not None:
+        provided_root = provided.resolve()
+        if not ((provided_root / "Cargo.toml").exists() or (provided_root / ".git").exists()):
+            msg = "Provided project root does not contain Cargo.toml or .git"
+            raise ValueError(msg)
+        return provided_root
 
-    if args.project_root:
-        provided_root = args.project_root.resolve()
-        if not (
-            (provided_root / "Cargo.toml").exists() or (provided_root / ".git").exists()
-        ):
-            print("❌ Provided project root does not contain Cargo.toml or .git")
-            return 1
-        project_root = provided_root
-    else:
-        current = Path(__file__).resolve().parent
-        while current != current.parent:
-            if (current / "Cargo.toml").exists() or (current / ".git").exists():
-                project_root = current
-                break
-            current = current.parent
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "Cargo.toml").exists() or (current / ".git").exists():
+            return current
+        current = current.parent
 
-    if project_root is None:
-        print("❌ Could not detect project root (no Cargo.toml or .git found)")
-        print(
-            "   Please run this script from within the project or specify --project-root"
-        )
+    msg = "Could not detect project root (no Cargo.toml or .git found)"
+    raise ValueError(msg)
+
+
+def _print_performance_summary(comparison: dict) -> None:
+    summary = comparison.get("summary", {})
+    if not summary:
+        return
+
+    print("\n📈 Performance Summary:")
+    print(f"   Total benchmarks: {summary['total_benchmarks']}")
+    print(f"   Regressions: {summary['regressions']}")
+    print(f"   Improvements: {summary['improvements']}")
+    print(f"   Stable: {summary['stable']}")
+    print(f"   New: {summary['new']}")
+
+    if summary["regressions"] > 0:
+        print(f"   Max regression: +{summary['max_regression']:.1f}%")
+
+    if summary["improvements"] > 0:
+        print(f"   Max improvement: +{summary['max_improvement']:.1f}%")
+
+
+def _handle_trends(analyzer: PerformanceAnalyzer, days: int) -> int:
+    print(f"📊 Analyzing performance trends over {days} days...")
+    trends = analyzer.analyze_trends(days)
+
+    if "error" in trends:
+        print(f"❌ {trends['error']}")
+        return 1
+
+    print(f"Analyzed {trends['baselines_analyzed']} baselines over {trends['period_days']} days")
+
+    degrading = [name for name, trend in trends["trends"].items() if trend["trend"] == "degrading"]
+    improving = [name for name, trend in trends["trends"].items() if trend["trend"] == "improving"]
+
+    if degrading:
+        print(f"\n🔴 Degrading trends ({len(degrading)} benchmarks):")
+        for bench in degrading:
+            change = trends["trends"][bench]["change_percent"]
+            print(f"  {bench}: {change:+.1f}% over period")
+
+    if improving:
+        print(f"\n🟢 Improving trends ({len(improving)} benchmarks):")
+        for bench in improving:
+            change = trends["trends"][bench]["change_percent"]
+            print(f"  {bench}: {change:+.1f}% over period")
+
+    return 0
+
+
+def _collect_current_results(analyzer: PerformanceAnalyzer, no_run: bool) -> dict:
+    if not no_run and not analyzer.run_benchmarks():
+        return {}
+
+    print("🔍 Extracting benchmark results...")
+    current_results = analyzer.extract_criterion_results()
+    if not current_results:
+        print("❌ No benchmark results found. Run 'cargo bench' first or remove --no-run flag.")
+        return {}
+
+    print(f"Found {len(current_results)} benchmark results")
+    return current_results
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_arg_parser().parse_args(argv)
+
+    try:
+        project_root = _find_project_root(args.project_root)
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        print("   Please run this script from within the project or specify --project-root")
         return 1
 
     analyzer = PerformanceAnalyzer(project_root)
 
-    # Handle trend analysis
-    if args.trends:
-        print(f"📊 Analyzing performance trends over {args.trends} days...")
-        trends = analyzer.analyze_trends(args.trends)
+    if args.trends is not None:
+        return _handle_trends(analyzer, args.trends)
 
-        if "error" in trends:
-            print(f"❌ {trends['error']}")
-            return 1
-
-        print(
-            f"Analyzed {trends['baselines_analyzed']} baselines over {trends['period_days']} days"
-        )
-
-        degrading = [
-            name
-            for name, trend in trends["trends"].items()
-            if trend["trend"] == "degrading"
-        ]
-        improving = [
-            name
-            for name, trend in trends["trends"].items()
-            if trend["trend"] == "improving"
-        ]
-
-        if degrading:
-            print(f"\n🔴 Degrading trends ({len(degrading)} benchmarks):")
-            for bench in degrading:
-                change = trends["trends"][bench]["change_percent"]
-                print(f"  {bench}: {change:+.1f}% over period")
-
-        if improving:
-            print(f"\n🟢 Improving trends ({len(improving)} benchmarks):")
-            for bench in improving:
-                change = trends["trends"][bench]["change_percent"]
-                print(f"  {bench}: {change:+.1f}% over period")
-
-        return 0
-
-    # Run benchmarks unless --no-run specified
-    if not args.no_run:
-        if not analyzer.run_benchmarks():
-            return 1
-
-    # Extract current results
-    print("🔍 Extracting benchmark results...")
-    current_results = analyzer.extract_criterion_results()
-
+    current_results = _collect_current_results(analyzer, args.no_run)
     if not current_results:
-        print(
-            "❌ No benchmark results found. Run 'cargo bench' first or remove --no-run flag."
-        )
         return 1
 
-    print(f"Found {len(current_results)} benchmark results")
-
-    # Handle saving baseline
     if args.save_baseline:
         analyzer.save_baseline(current_results, args.tag)
         return 0
 
-    # Load baseline for comparison
     baseline_file = Path(args.compare) if args.compare else None
     baseline = analyzer.load_baseline(baseline_file)
 
@@ -622,35 +608,14 @@ Examples:
         print("   Run with --save-baseline to create an initial baseline.")
         return 0
 
-    # Compare results
     print("📊 Comparing with baseline...")
     comparison = analyzer.compare_results(current_results, baseline, args.threshold)
-
-    # Print results to console
     analyzer.print_comparison_results(comparison)
 
-    # Generate detailed report if requested
     if args.report:
-        report_file = Path(args.report)
-        analyzer.generate_report(comparison, report_file)
+        analyzer.generate_report(comparison, Path(args.report))
 
-    # Print summary
-    summary = comparison.get("summary", {})
-    if summary:
-        print("\n📈 Performance Summary:")
-        print(f"   Total benchmarks: {summary['total_benchmarks']}")
-        print(f"   Regressions: {summary['regressions']}")
-        print(f"   Improvements: {summary['improvements']}")
-        print(f"   Stable: {summary['stable']}")
-        print(f"   New: {summary['new']}")
-
-        if summary["regressions"] > 0:
-            print(f"   Max regression: +{summary['max_regression']:.1f}%")
-
-        if summary["improvements"] > 0:
-            print(f"   Max improvement: +{summary['max_improvement']:.1f}%")
-
-    # Exit with error code if regressions found (for CI)
+    _print_performance_summary(comparison)
     return 1 if comparison["regressions"] else 0
 
 
