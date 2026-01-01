@@ -242,6 +242,6 @@ This project's license is specified in [LICENSE](LICENSE).
 ---
 
 [Rust]: https://rust-lang.org
-[Delaunay triangulation]: https://en.wikipedia.org/wiki/Delaunay_triangulation
+[Delaunay triangulation]: https://crates.io/crates/delaunay
 [Kani]: https://model-checking.github.io/kani/
 [Criterion]: https://github.com/bheisler/criterion.rs
