@@ -349,7 +349,7 @@ class HardwareInfo:
                         break
         except subprocess.CalledProcessError as e:
             logger.debug("rustc command failed: %s", e)
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, ValueError) as e:
             logger.debug("Failed to get Rust info: %s", e)
 
         return rust_version, rust_target
@@ -605,15 +605,13 @@ class HardwareComparator:
 
             if current_mem_num is not None and baseline_mem_num is not None:
                 # Percentage-based tolerance is more robust across small and large memory systems.
-                # Guard against division by zero if baseline parsing returns 0.
-                if baseline_mem_num <= 0:
-                    mem_diff = abs(current_mem_num - baseline_mem_num)
-                    if mem_diff > 0.1:
-                        warning = f"⚠️  Memory differs: {current} vs {baseline}"
-                else:
+                if baseline_mem_num > 0:
                     mem_diff_pct = abs(current_mem_num - baseline_mem_num) / baseline_mem_num * 100
                     if mem_diff_pct > 2.0:  # More than 2% difference
                         warning = f"⚠️  Memory differs: {current} vs {baseline}"
+                elif abs(current_mem_num - baseline_mem_num) > 0.1:
+                    # Fallback for edge case where baseline is 0 or negative
+                    warning = f"⚠️  Memory differs: {current} vs {baseline}"
             elif current != baseline:
                 warning = f"⚠️  Memory differs: {current} vs {baseline}"
 
@@ -678,7 +676,7 @@ def main():
             # Exit with warning code if there are hardware differences
             sys.exit(1 if has_warnings else 0)
 
-        except Exception as exc:
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
             print(f"error: comparison failed: {exc}", file=sys.stderr)
             sys.exit(1)
 

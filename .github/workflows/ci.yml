@@ -1,5 +1,5 @@
 name: CI
-# cspell:ignore rhysd binstall mktemp
+# cspell:ignore rhysd binstall mktemp sha256sum sha256sums shasum
 permissions:
   contents: read
 concurrency:
@@ -23,6 +23,8 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
+  MARKDOWNLINT_VERSION: "0.42.0"
+  CSPELL_VERSION: "8.16.0"
   SHFMT_VERSION: "3.12.0"
   UV_VERSION: "0.9.21"
 
@@ -75,7 +77,7 @@ jobs:
       - name: Install Node.js packages
         if: matrix.os != 'windows-latest'
         run: |
-          npm install -g markdownlint-cli cspell
+          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }} cspell@${{ env.CSPELL_VERSION }}
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'
@@ -90,6 +92,7 @@ jobs:
 
           # actionlint is published as prebuilt binaries (Go), not a Rust crate.
           # Install directly from rhysd/actionlint releases to avoid cargo-binstall fallback failures.
+          # Verify SHA256 checksums from the upstream release for supply-chain hardening.
           OS="$(uname -s)"
           ARCH="$(uname -m)"
 
@@ -111,14 +114,32 @@ jobs:
               ;;
           esac
 
+          verify_sha256() {
+            local checksum_file="$1"
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum -c "$checksum_file"
+            else
+              shasum -a 256 -c "$checksum_file"
+            fi
+          }
+
           VERSION="${ACTIONLINT_VERSION}"
           TARBALL="actionlint_${VERSION}_${ACTIONLINT_OS}_${ACTIONLINT_ARCH}.tar.gz"
-          URL="https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${TARBALL}"
+          CHECKSUMS_FILE="actionlint_${VERSION}_checksums.txt"
+          BASE_URL="https://github.com/rhysd/actionlint/releases/download/v${VERSION}"
 
           tmpdir="$(mktemp -d)"
           trap 'rm -rf "$tmpdir"' EXIT
 
-          curl -fsSL "$URL" -o "$tmpdir/$TARBALL"
+          curl -fsSL "${BASE_URL}/${TARBALL}" -o "$tmpdir/$TARBALL"
+          curl -fsSL "${BASE_URL}/${CHECKSUMS_FILE}" -o "$tmpdir/$CHECKSUMS_FILE"
+
+          orig_dir="$PWD"
+          cd "$tmpdir"
+          grep -F "  $TARBALL" "$CHECKSUMS_FILE" > checksum.txt
+          verify_sha256 checksum.txt
+          cd "$orig_dir"
+
           tar -xzf "$tmpdir/$TARBALL" -C "$tmpdir"
 
           actionlint_path="$(find "$tmpdir" -type f -name actionlint | head -n 1)"
@@ -141,11 +162,26 @@ jobs:
           sudo apt-get install -y shellcheck jq
 
           # Install shfmt (pinned for CI consistency)
+          SHFMT_ASSET="shfmt_v${SHFMT_VERSION}_linux_amd64"
+          SHFMT_BASE_URL="https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}"
+
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+
           curl -fsSL \
-            "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" \
-            -o shfmt
-          chmod +x shfmt
-          sudo mv shfmt /usr/local/bin/
+            "${SHFMT_BASE_URL}/${SHFMT_ASSET}" \
+            -o "$tmpdir/${SHFMT_ASSET}"
+          curl -fsSL \
+            "${SHFMT_BASE_URL}/sha256sums.txt" \
+            -o "$tmpdir/sha256sums.txt"
+
+          (
+            cd "$tmpdir"
+            grep -F "  ${SHFMT_ASSET}" sha256sums.txt > checksum.txt
+            sha256sum -c checksum.txt
+          )
+
+          sudo install -m 0755 "$tmpdir/${SHFMT_ASSET}" /usr/local/bin/shfmt
 
       - name: Install additional tools (macOS)
         if: matrix.os == 'macos-latest'
@@ -158,11 +194,27 @@ jobs:
           if [[ "$(uname -m)" == "arm64" ]]; then
             SHFMT_ARCH="arm64"
           fi
+
+          SHFMT_ASSET="shfmt_v${SHFMT_VERSION}_darwin_${SHFMT_ARCH}"
+          SHFMT_BASE_URL="https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}"
+
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+
           curl -fsSL \
-            "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_darwin_${SHFMT_ARCH}" \
-            -o shfmt
-          chmod +x shfmt
-          sudo mv shfmt /usr/local/bin/
+            "${SHFMT_BASE_URL}/${SHFMT_ASSET}" \
+            -o "$tmpdir/${SHFMT_ASSET}"
+          curl -fsSL \
+            "${SHFMT_BASE_URL}/sha256sums.txt" \
+            -o "$tmpdir/sha256sums.txt"
+
+          (
+            cd "$tmpdir"
+            grep -F "  ${SHFMT_ASSET}" sha256sums.txt > checksum.txt
+            shasum -a 256 -c checksum.txt
+          )
+
+          sudo install -m 0755 "$tmpdir/${SHFMT_ASSET}" /usr/local/bin/shfmt
 
       - name: Run CI checks (Linux/macOS)
         if: matrix.os != 'windows-latest'
