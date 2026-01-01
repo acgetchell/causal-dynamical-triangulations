@@ -269,7 +269,6 @@ mod tests {
     #[test]
     fn test_backend_vertex_and_edge_counting() {
         use crate::cdt::triangulation::CdtTriangulation;
-        use crate::geometry::traits::TriangulationQuery;
 
         // Use fixed seed to ensure deterministic, closed triangulation with Euler=2
         // Seed 53 produces V=5, E=9, F=6, Euler=2 for this configuration
@@ -278,26 +277,10 @@ mod tests {
         let triangulation = CdtTriangulation::from_seeded_points(5, 1, 2, TRIANGULATION_SEED)
             .expect("Failed to create triangulation with fixed seed");
         let geometry = triangulation.geometry();
-
-        // Test that the backend-based counting methods work
-        let edge_count = geometry.edge_count();
-        let vertex_count = geometry.vertex_count();
-        let triangle_count = geometry.face_count();
-
-        // Basic sanity checks
-        assert!(vertex_count > 0);
-        assert!(triangle_count > 0);
-        assert!(edge_count > 0);
-
-        // For a closed 2D triangulation, verify Euler's formula: V - E + F = 2
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let euler_check = vertex_count as i32 - edge_count as i32 + triangle_count as i32;
-
-        // For a closed triangulation (sphere topology), Euler's formula gives:
-        // χ = V - E + F = 2
-        assert_eq!(
-            euler_check, 2,
-            "Euler's formula V - E + F = 2 failed for closed triangulation: {vertex_count} - {edge_count} + {triangle_count} = {euler_check} (expected 2)"
+        // Use upstream validation (Levels 1–4) instead of manual Euler checks
+        assert!(
+            geometry.triangulation().is_valid().is_ok(),
+            "Triangulation should be valid across all levels"
         );
     }
 

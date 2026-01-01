@@ -10,13 +10,17 @@ import sys
 from collections.abc import Mapping, MutableSequence, Sequence
 from pathlib import Path
 from re import Pattern
+from typing import TYPE_CHECKING
 
-# Add the script directory to Python path for shared utilities
-SCRIPT_DIR = Path(__file__).parent
-sys.path.insert(0, str(SCRIPT_DIR))
-
-# Shared utilities available but not yet used in this script
-# Can be imported when needed: from changelog_utils import ChangelogUtils
+if TYPE_CHECKING:
+    from changelog_utils import ChangelogUtils
+else:
+    try:
+        # When executed as a script from scripts/
+        from changelog_utils import ChangelogUtils
+    except ModuleNotFoundError:
+        # When imported as a module (e.g., scripts.enhance_commits)
+        from scripts.changelog_utils import ChangelogUtils
 
 # Precompiled regex patterns for performance
 COMMIT_BULLET_RE = re.compile(r"^\s*[-*]\s+")
@@ -258,7 +262,8 @@ def _add_section_with_entries(
     output_lines.append(f"### {section_name}")
     output_lines.append("")  # Blank line after heading
     for i, entry in enumerate(entries):
-        output_lines.append(entry)
+        # Wrap bare URLs to satisfy MD034
+        output_lines.append(ChangelogUtils.wrap_bare_urls(entry))
         # Add blank line after each entry except the last one in the section
         if i < len(entries) - 1:
             output_lines.append("")
@@ -274,7 +279,7 @@ def process_and_output_categorized_entries(
         return
 
     # Categorize all entries
-    categorized = {
+    categorized: dict[str, list[str]] = {
         "added": [],
         "changed": [],
         "removed": [],
@@ -428,13 +433,13 @@ def _handle_release_end(
 
 def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
     """Process changelog lines and return categorized output."""
-    output_lines = []
+    output_lines: list[str] = []
     section_state = {
         "in_changes_section": False,
         "in_fixed_issues": False,
         "in_merged_prs_section": False,
     }
-    categorize_entries_list = []
+    categorize_entries_list: list[str] = []
 
     line_index = 0
     while line_index < len(lines):
@@ -476,8 +481,8 @@ def _process_changelog_lines(lines: Sequence[str]) -> list[str]:
             line_index += 1
             continue
 
-        # Print all other lines normally
-        output_lines.append(line)
+        # Print all other lines normally (wrap bare URLs)
+        output_lines.append(ChangelogUtils.wrap_bare_urls(line))
         line_index += 1
 
     # Process any remaining entries at the end of the file

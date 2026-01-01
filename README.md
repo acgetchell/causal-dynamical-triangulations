@@ -63,14 +63,26 @@ just --list          # See all available development commands
 just run-example     # Basic simulation
 ./examples/scripts/basic_simulation.sh      # Shell script example
 ./examples/scripts/parameter_sweep.sh       # Temperature sweep study
+./examples/scripts/performance_test.sh      # Performance benchmarking across system sizes
 ```
+
+`just setup` prints a checklist of external tools used by repository workflows
+(for example: `uv`, Node.js/`npx`, `taplo`, `actionlint`, `shfmt`, `shellcheck`, `jq`) and
+how to install them.
 
 **Just Workflows:**
 
-- `just dev` - Quick development cycle (format, lint, test)
-- `just quality` - Comprehensive code quality checks
-- `just commit-check` - Full pre-commit validation
-- `just ci` - Simulate CI pipeline locally (requires Kani)
+- `just fix` - Apply formatters/auto-fixes (mutating)
+- `just check` - Run linters/validators (non-mutating)
+- `just dev` - Quick development cycle (fix + clippy + tests)
+- `just ci` - CI parity (mirrors GitHub Actions workflow [`ci.yml`](.github/workflows/ci.yml))
+- `just commit-check` - Comprehensive pre-commit validation (includes Kani)
+
+**Repository tooling (via `just`):**
+
+- `just changelog` - Regenerate `CHANGELOG.md`
+- `just changelog-tag v0.1.0` - Create an annotated git tag from changelog content
+- `just perf-help` - Show performance analysis commands (`perf-baseline`, `perf-check`, etc.)
 
 ## 📋 Examples
 
@@ -169,6 +181,9 @@ just kani-fast
 cargo kani --harness verify_action_config
 cargo kani --harness verify_regge_action_properties
 ```
+
+**Toolchain note:** Kani ships its own pinned nightly and does not read `rust-toolchain.toml`. We install `kani-verifier`
+0.66.0 (bundled rustc 1.93.0-nightly) for reproducibility; regular builds/tests continue to use the workspace MSRV (1.92.0).
 
 ### Workflow behavior
 

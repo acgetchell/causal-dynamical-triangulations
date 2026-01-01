@@ -54,8 +54,11 @@ pub mod geometry {
     }
 
     // Type aliases for common backend combinations
-    /// 2D Delaunay backend with f64 coordinates (most common configuration)
-    pub type DelaunayBackend2D = backends::delaunay::DelaunayBackend<f64, i32, i32, 2>;
+    /// 2D Delaunay backend (most common configuration).
+    ///
+    /// Uses `f64` coordinates; the `i32` type parameters are the per-vertex and per-cell data
+    /// payloads.
+    pub type DelaunayBackend2D = backends::delaunay::DelaunayBackend<i32, i32, 2>;
 
     /// Default backend type for 2D CDT simulations
     pub type DefaultBackend = DelaunayBackend2D;

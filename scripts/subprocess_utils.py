@@ -36,9 +36,7 @@ def get_safe_executable(command: str) -> str:
     """
     full_path = shutil.which(command)
     if full_path is None:
-        raise ExecutableNotFoundError(
-            f"Required executable '{command}' not found in PATH"
-        )
+        raise ExecutableNotFoundError(f"Required executable '{command}' not found in PATH")
     return full_path
 
 
@@ -77,9 +75,7 @@ def _build_run_kwargs(function_name: str, **kwargs: Any) -> dict[str, Any]:
     return run_kwargs
 
 
-def run_git_command(
-    args: list[str], cwd: Path | None = None, **kwargs: Any
-) -> subprocess.CompletedProcess[str]:
+def run_git_command(args: list[str], cwd: Path | None = None, **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """
     Run a git command securely using full executable path.
 
@@ -141,9 +137,7 @@ def run_cargo_command(
     )
 
 
-def run_safe_command(
-    command: str, args: list[str], cwd: Path | None = None, **kwargs: Any
-) -> subprocess.CompletedProcess[str]:
+def run_safe_command(command: str, args: list[str], cwd: Path | None = None, **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """
     Run any command securely using full executable path.
 

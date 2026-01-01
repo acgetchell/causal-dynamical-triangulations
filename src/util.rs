@@ -1,3 +1,4 @@
+use delaunay::geometry::kernel::FastKernel;
 use rand::random;
 
 /// Generates a random floating-point number between 0.0 and 1.0.
@@ -19,7 +20,9 @@ pub fn generate_delaunay2_with_context(
     number_of_vertices: u32,
     coordinate_range: (f64, f64),
     seed: Option<u64>,
-) -> crate::errors::CdtResult<delaunay::core::Tds<f64, i32, i32, 2>> {
+) -> crate::errors::CdtResult<
+    delaunay::core::delaunay_triangulation::DelaunayTriangulation<FastKernel<f64>, i32, i32, 2>,
+> {
     use crate::errors::CdtError;
 
     // Validate parameters before attempting generation
@@ -40,7 +43,7 @@ pub fn generate_delaunay2_with_context(
     }
 
     // Generate triangulation with or without seed
-    delaunay::geometry::util::generate_random_triangulation(
+    let dt = delaunay::geometry::util::generate_random_triangulation(
         number_of_vertices as usize,
         coordinate_range,
         None,
@@ -51,7 +54,9 @@ pub fn generate_delaunay2_with_context(
         coordinate_range,
         attempt: 1,
         underlying_error: e.to_string(),
-    })
+    })?;
+
+    Ok(dt)
 }
 
 /// Generates a random Delaunay triangulation.
@@ -63,7 +68,7 @@ pub fn generate_delaunay2_with_context(
 pub fn generate_random_delaunay2(
     number_of_vertices: u32,
     coordinate_range: (f64, f64),
-) -> delaunay::core::Tds<f64, i32, i32, 2> {
+) -> delaunay::core::delaunay_triangulation::DelaunayTriangulation<FastKernel<f64>, i32, i32, 2> {
     generate_delaunay2_with_context(number_of_vertices, coordinate_range, None)
         .unwrap_or_else(|_| {
             panic!(
@@ -82,7 +87,7 @@ pub fn generate_seeded_delaunay2(
     number_of_vertices: u32,
     coordinate_range: (f64, f64),
     seed: u64,
-) -> delaunay::core::Tds<f64, i32, i32, 2> {
+) -> delaunay::core::delaunay_triangulation::DelaunayTriangulation<FastKernel<f64>, i32, i32, 2> {
     generate_delaunay2_with_context(number_of_vertices, coordinate_range, Some(seed))
         .unwrap_or_else(|_| {
             panic!(
@@ -129,9 +134,9 @@ mod tests {
             "Should successfully generate triangulation with valid parameters"
         );
 
-        let tds = result.unwrap();
-        assert_eq!(tds.vertices().len(), 4, "Should have 4 vertices");
-        assert!(!tds.cells().is_empty(), "Should have at least one cell");
+        let dt = result.unwrap();
+        assert_eq!(dt.number_of_vertices(), 4, "Should have 4 vertices");
+        assert!(dt.number_of_cells() > 0, "Should have at least one cell");
     }
 
     #[test]
@@ -143,18 +148,18 @@ mod tests {
         assert!(result1.is_ok(), "First generation should succeed");
         assert!(result2.is_ok(), "Second generation should succeed");
 
-        let tds1 = result1.unwrap();
-        let tds2 = result2.unwrap();
+        let dt1 = result1.unwrap();
+        let dt2 = result2.unwrap();
 
         // With the same seed, should produce identical triangulations
         assert_eq!(
-            tds1.vertices().len(),
-            tds2.vertices().len(),
+            dt1.number_of_vertices(),
+            dt2.number_of_vertices(),
             "Should have same vertex count"
         );
         assert_eq!(
-            tds1.cells().len(),
-            tds2.cells().len(),
+            dt1.number_of_cells(),
+            dt2.number_of_cells(),
             "Should have same cell count"
         );
     }
@@ -221,14 +226,14 @@ mod tests {
                 "Should generate {description} triangulation with {vertex_count} vertices"
             );
 
-            let tds = result.unwrap();
+            let dt = result.unwrap();
             assert_eq!(
-                tds.vertices().len(),
+                dt.number_of_vertices(),
                 vertex_count as usize,
                 "Should have {vertex_count} vertices for {description} triangulation"
             );
             assert!(
-                !tds.cells().is_empty(),
+                dt.number_of_cells() > 0,
                 "Should have at least one cell for {description} triangulation"
             );
         }
@@ -245,16 +250,16 @@ mod tests {
                 "Should generate triangulation with range {range:?}"
             );
 
-            let tds = result.unwrap();
-            assert_eq!(tds.vertices().len(), 4, "Should have 4 vertices");
+            let dt = result.unwrap();
+            assert_eq!(dt.number_of_vertices(), 4, "Should have 4 vertices");
         }
     }
 
     #[test]
     fn test_generate_random_delaunay2_success() {
-        let tds = generate_random_delaunay2(5, (0.0, 10.0));
-        assert_eq!(tds.vertices().len(), 5, "Should have 5 vertices");
-        assert!(!tds.cells().is_empty(), "Should have at least one cell");
+        let dt = generate_random_delaunay2(5, (0.0, 10.0));
+        assert_eq!(dt.number_of_vertices(), 5, "Should have 5 vertices");
+        assert!(dt.number_of_cells() > 0, "Should have at least one cell");
     }
 
     #[test]
@@ -262,13 +267,16 @@ mod tests {
         let sizes = [3, 4, 6, 8, 12];
 
         for size in sizes {
-            let tds = generate_random_delaunay2(size, (0.0, 50.0));
+            let dt = generate_random_delaunay2(size, (0.0, 50.0));
             assert_eq!(
-                tds.vertices().len(),
+                dt.number_of_vertices(),
                 size as usize,
                 "Should have {size} vertices"
             );
-            assert!(!tds.cells().is_empty(), "Should have cells for size {size}");
+            assert!(
+                dt.number_of_cells() > 0,
+                "Should have cells for size {size}"
+            );
         }
     }
 
@@ -287,34 +295,34 @@ mod tests {
     #[test]
     fn test_generate_seeded_delaunay2_deterministic() {
         let seed = 42;
-        let tds1 = generate_seeded_delaunay2(6, (0.0, 20.0), seed);
-        let tds2 = generate_seeded_delaunay2(6, (0.0, 20.0), seed);
+        let dt1 = generate_seeded_delaunay2(6, (0.0, 20.0), seed);
+        let dt2 = generate_seeded_delaunay2(6, (0.0, 20.0), seed);
 
         // Should produce identical results
         assert_eq!(
-            tds1.vertices().len(),
-            tds2.vertices().len(),
+            dt1.number_of_vertices(),
+            dt2.number_of_vertices(),
             "Should have same vertex count"
         );
         assert_eq!(
-            tds1.cells().len(),
-            tds2.cells().len(),
+            dt1.number_of_cells(),
+            dt2.number_of_cells(),
             "Should have same cell count"
         );
 
         // Verify expected properties
-        assert_eq!(tds1.vertices().len(), 6, "Should have 6 vertices");
-        assert!(!tds1.cells().is_empty(), "Should have cells");
+        assert_eq!(dt1.number_of_vertices(), 6, "Should have 6 vertices");
+        assert!(dt1.number_of_cells() > 0, "Should have cells");
     }
 
     #[test]
     fn test_generate_seeded_delaunay2_different_seeds() {
-        let tds1 = generate_seeded_delaunay2(5, (0.0, 10.0), 123);
-        let tds2 = generate_seeded_delaunay2(5, (0.0, 10.0), 456);
+        let dt1 = generate_seeded_delaunay2(5, (0.0, 10.0), 123);
+        let dt2 = generate_seeded_delaunay2(5, (0.0, 10.0), 456);
 
         // Both should succeed and have same vertex count
-        assert_eq!(tds1.vertices().len(), 5, "First should have 5 vertices");
-        assert_eq!(tds2.vertices().len(), 5, "Second should have 5 vertices");
+        assert_eq!(dt1.number_of_vertices(), 5, "First should have 5 vertices");
+        assert_eq!(dt2.number_of_vertices(), 5, "Second should have 5 vertices");
 
         // With different seeds, they should potentially have different structures
         // (though this is probabilistic and not guaranteed)
@@ -325,14 +333,14 @@ mod tests {
         let seeds = [1, 100, 1000, u64::MAX];
 
         for seed in seeds {
-            let tds = generate_seeded_delaunay2(4, (-5.0, 5.0), seed);
+            let dt = generate_seeded_delaunay2(4, (-5.0, 5.0), seed);
             assert_eq!(
-                tds.vertices().len(),
+                dt.number_of_vertices(),
                 4,
                 "Should have 4 vertices with seed {seed}"
             );
             assert!(
-                !tds.cells().is_empty(),
+                dt.number_of_cells() > 0,
                 "Should have cells with seed {seed}"
             );
         }
@@ -357,12 +365,12 @@ mod tests {
     #[test]
     fn test_euler_characteristic_properties() {
         // Test that generated triangulations satisfy basic topological properties
-        let tds = generate_random_delaunay2(8, (0.0, 10.0));
+        let dt = generate_random_delaunay2(8, (0.0, 10.0));
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let v = tds.vertices().len() as i32;
+        let v = dt.number_of_vertices() as i32;
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let c = tds.cells().len() as i32; // faces in 2D
+        let c = dt.number_of_cells() as i32; // faces in 2D
 
         // Basic sanity checks
         assert!(v >= 3, "Should have at least 3 vertices");
@@ -400,23 +408,27 @@ mod tests {
             .collect();
 
         // All results should have the same structure
-        for (i, tds) in results.iter().enumerate() {
-            assert_eq!(tds.vertices().len(), 7, "Result {i} should have 7 vertices");
-            assert!(!tds.cells().is_empty(), "Result {i} should have cells");
+        for (i, dt) in results.iter().enumerate() {
+            assert_eq!(
+                dt.number_of_vertices(),
+                7,
+                "Result {i} should have 7 vertices"
+            );
+            assert!(dt.number_of_cells() > 0, "Result {i} should have cells");
         }
 
         // All results should be identical in structure
-        let first_vertex_count = results[0].vertices().len();
-        let first_cell_count = results[0].cells().len();
+        let first_vertex_count = results[0].number_of_vertices();
+        let first_cell_count = results[0].number_of_cells();
 
-        for (i, tds) in results.iter().enumerate().skip(1) {
+        for (i, dt) in results.iter().enumerate().skip(1) {
             assert_eq!(
-                tds.vertices().len(),
+                dt.number_of_vertices(),
                 first_vertex_count,
                 "Result {i} vertex count should match first result"
             );
             assert_eq!(
-                tds.cells().len(),
+                dt.number_of_cells(),
                 first_cell_count,
                 "Result {i} cell count should match first result"
             );

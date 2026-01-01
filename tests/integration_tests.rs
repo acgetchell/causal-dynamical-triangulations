@@ -47,7 +47,7 @@ mod integration_tests {
     #[test]
     fn test_edge_counting_consistency() {
         // Test that edge counting is consistent using a fixed seed for deterministic results
-        // Seed 13 produces V=7, E=10, F=5, Euler=2 for this configuration
+        // Seed 13 produces a deterministic planar triangulation with boundary (χ = 1)
         const TRIANGULATION_SEED: u64 = 13;
 
         let triangulation = CdtTriangulation::from_seeded_points(7, 3, 2, TRIANGULATION_SEED)
@@ -61,19 +61,19 @@ mod integration_tests {
         let e = edge_count;
         let f = triangulation.face_count();
 
-        // For a closed triangulation, Euler's formula V - E + F = 2
+        // For a manifold with boundary (typical planar triangulation), Euler's formula V - E + F = 1
         let euler =
             i32::try_from(v).unwrap() - i32::try_from(e).unwrap() + i32::try_from(f).unwrap();
         assert_eq!(
-            euler, 2,
-            "Euler characteristic should be 2 for closed triangulation, got {euler} (V={v}, E={e}, F={f})"
+            euler, 1,
+            "Euler characteristic should be 1 for planar triangulation with boundary, got {euler} (V={v}, E={e}, F={f})"
         );
     }
 
     #[test]
     fn test_topology_invariants() {
         // Use fixed seed for deterministic topology testing
-        // Seed 29 produces V=6, E=9, F=5, Euler=2 for this configuration
+        // Seed 29 produces a planar triangulation with boundary (χ = 1)
         const TRIANGULATION_SEED: u64 = 29;
 
         let triangulation = CdtTriangulation::from_seeded_points(6, 1, 2, TRIANGULATION_SEED)
@@ -83,11 +83,11 @@ mod integration_tests {
         let e = i32::try_from(triangulation.edge_count()).unwrap_or(i32::MAX);
         let f = i32::try_from(triangulation.face_count()).unwrap_or(i32::MAX);
 
-        // Verify Euler's formula for closed triangulations
+        // Verify Euler's formula for manifolds with boundary (typical 2D triangulation)
         let euler = v - e + f;
         assert_eq!(
-            euler, 2,
-            "Euler characteristic should be 2 for closed triangulation, got {euler} (V={v}, E={e}, F={f})"
+            euler, 1,
+            "Euler characteristic should be 1 for planar triangulation with boundary, got {euler} (V={v}, E={e}, F={f})"
         );
 
         // Verify all counts are positive

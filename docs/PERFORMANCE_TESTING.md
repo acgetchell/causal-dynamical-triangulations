@@ -349,12 +349,12 @@ just perf-check 5.0   # Strict threshold before completion
 
 ### Threshold Guidelines
 
-| Change Type | Recommended Threshold | Rationale |
-|-------------|----------------------|-----------|
-| Bug fixes | 5% | Should not impact performance significantly |
-| New features | 10-15% | May have some performance cost |
-| Optimizations | 3% | Should show measurable improvement |
-| Experimental | 20% | Exploratory changes, focus on functionality |
+|Change Type|Recommended Threshold|Rationale|
+|-----------|---------------------|----------|
+|Bug fixes|5%|Should not impact performance significantly|
+|New features|10-15%|May have some performance cost|
+|Optimizations|3%|Should show measurable improvement|
+|Experimental|20%|Exploratory changes, focus on functionality|
 
 ### Baseline Management
 
