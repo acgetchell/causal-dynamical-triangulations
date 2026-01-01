@@ -424,7 +424,7 @@ class HardwareInfo:
         command_name = cmd[0]
         args = cmd[1:] if len(cmd) > 1 else []
 
-        result = run_safe_command(command_name, args, check=True)
+        result = run_safe_command(command_name, args, capture_output=True, text=True, check=True)
         return result.stdout.strip()
 
 
