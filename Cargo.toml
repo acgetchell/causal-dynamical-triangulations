@@ -37,7 +37,7 @@ harness = false
 clap = { version = "4.5.53", features = [ "derive" ] }
 float-ord = "0.3.2"
 rand = "0.9.2"
-delaunay = "0.6.1"
+delaunay = "0.6.2"
 serde = { version = "1.0.228", features = [ "derive" ] }
 num-traits = "0.2.19"
 log = "0.4.29"
