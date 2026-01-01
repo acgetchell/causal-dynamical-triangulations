@@ -15,9 +15,12 @@ import pytest
 # Add scripts directory to path so we can import modules as top-level scripts/*.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from performance_analysis import PerformanceAnalyzer, TrendAnalysisSuccess
+from performance_analysis import PerformanceAnalyzer
+
+if TYPE_CHECKING:
+    from performance_analysis import TrendAnalysisSuccess
 
 
 def _write_baseline(

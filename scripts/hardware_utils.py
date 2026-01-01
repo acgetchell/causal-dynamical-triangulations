@@ -55,7 +55,7 @@ class HardwareInfo:
                 return self._get_cpu_info_linux()
             if self.os_type == "Windows":
                 return self._get_cpu_info_windows()
-        except Exception as e:
+        except (subprocess.CalledProcessError, OSError, ValueError) as e:
             logger.debug(
                 "Failed to get CPU info for OS %s: %s (%s)",
                 self.os_type,

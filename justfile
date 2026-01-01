@@ -340,9 +340,9 @@ setup:
     echo ""
     kani_version="0.66.0"
     echo "Ensuring Kani verifier (kani-verifier ${kani_version}) is installed..."
-    installed_kani_version="$(cargo kani --version 2>/dev/null || true)"
-    if [[ "$installed_kani_version" == "cargo-kani ${kani_version}"* ]]; then
-        echo "  ✓ $installed_kani_version"
+    installed_kani_version="$(cargo kani --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+    if [[ "$installed_kani_version" == "$kani_version" ]]; then
+        echo "  ✓ kani-verifier $installed_kani_version"
     else
         cargo install --locked --force --version "${kani_version}" kani-verifier
         cargo kani --version

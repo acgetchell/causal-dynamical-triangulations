@@ -83,17 +83,13 @@ jobs:
 
       - name: Install actionlint (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash" \
-            -o download-actionlint.bash
-          bash download-actionlint.bash "${ACTIONLINT_VERSION}" "${RUNNER_TEMP}"
-          rm download-actionlint.bash
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2.65.1
+        with:
+          tool: actionlint@v${{ env.ACTIONLINT_VERSION }}
 
-          # Make it available to subsequent steps.
-          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
-          export PATH="${RUNNER_TEMP}:$PATH"
-
-          actionlint -version
+      - name: actionlint -version
+        if: matrix.os != 'windows-latest'
+        run: actionlint -version
 
       - name: Install additional tools (Linux)
         if: matrix.os == 'ubuntu-latest'

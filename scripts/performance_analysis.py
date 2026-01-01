@@ -219,6 +219,31 @@ class PerformanceAnalyzer:
             print(f"❌ Error running benchmarks: {exc}")
             return False
 
+    @staticmethod
+    def _extract_confidence_intervals(
+        data_dict: dict[str, object],
+        estimate: CriterionEstimate,
+    ) -> None:
+        """Extract confidence intervals from mean section if available."""
+        mean_section = data_dict.get("mean")
+        if not isinstance(mean_section, dict):
+            return
+
+        mean_dict = cast("dict[str, object]", mean_section)
+        mean_ci = mean_dict.get("confidence_interval")
+        if not isinstance(mean_ci, dict):
+            return
+
+        mean_ci_dict = cast("dict[str, object]", mean_ci)
+
+        lower = mean_ci_dict.get("lower_bound")
+        if isinstance(lower, (int, float)):
+            estimate["mean_ci_lower"] = float(lower)
+
+        upper = mean_ci_dict.get("upper_bound")
+        if isinstance(upper, (int, float)):
+            estimate["mean_ci_upper"] = float(upper)
+
     def extract_criterion_results(self) -> dict[str, CriterionEstimate]:
         """Extract benchmark results from criterion output directory."""
         results: dict[str, CriterionEstimate] = {}
@@ -268,20 +293,7 @@ class PerformanceAnalyzer:
                 }
 
                 # Add confidence intervals if available
-                mean_section = data_dict.get("mean")
-                if isinstance(mean_section, dict):
-                    mean_dict = cast("dict[str, object]", mean_section)
-                    mean_ci = mean_dict.get("confidence_interval")
-                    if isinstance(mean_ci, dict):
-                        mean_ci_dict = cast("dict[str, object]", mean_ci)
-
-                        lower = mean_ci_dict.get("lower_bound")
-                        if isinstance(lower, (int, float)):
-                            estimate["mean_ci_lower"] = float(lower)
-
-                        upper = mean_ci_dict.get("upper_bound")
-                        if isinstance(upper, (int, float)):
-                            estimate["mean_ci_upper"] = float(upper)
+                self._extract_confidence_intervals(data_dict, estimate)
 
                 results[benchmark_name] = estimate
 
