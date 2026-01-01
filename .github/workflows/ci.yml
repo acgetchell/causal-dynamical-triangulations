@@ -1,4 +1,5 @@
 name: CI
+# cspell:ignore rhysd binstall mktemp
 permissions:
   contents: read
 concurrency:
@@ -21,7 +22,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  ACTIONLINT_VERSION: "1.7.9"
+  ACTIONLINT_VERSION: "1.7.10"
   SHFMT_VERSION: "3.12.0"
   UV_VERSION: "0.9.21"
 
@@ -84,9 +85,49 @@ jobs:
 
       - name: Install actionlint (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2.65.1
-        with:
-          tool: actionlint@${{ env.ACTIONLINT_VERSION }}
+        run: |
+          set -euo pipefail
+
+          # actionlint is published as prebuilt binaries (Go), not a Rust crate.
+          # Install directly from rhysd/actionlint releases to avoid cargo-binstall fallback failures.
+          OS="$(uname -s)"
+          ARCH="$(uname -m)"
+
+          case "$OS" in
+            Linux) ACTIONLINT_OS="linux" ;;
+            Darwin) ACTIONLINT_OS="darwin" ;;
+            *)
+              echo "Unsupported OS for actionlint: $OS" >&2
+              exit 1
+              ;;
+          esac
+
+          case "$ARCH" in
+            x86_64|amd64) ACTIONLINT_ARCH="amd64" ;;
+            arm64|aarch64) ACTIONLINT_ARCH="arm64" ;;
+            *)
+              echo "Unsupported architecture for actionlint: $ARCH" >&2
+              exit 1
+              ;;
+          esac
+
+          VERSION="${ACTIONLINT_VERSION}"
+          TARBALL="actionlint_${VERSION}_${ACTIONLINT_OS}_${ACTIONLINT_ARCH}.tar.gz"
+          URL="https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${TARBALL}"
+
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+
+          curl -fsSL "$URL" -o "$tmpdir/$TARBALL"
+          tar -xzf "$tmpdir/$TARBALL" -C "$tmpdir"
+
+          actionlint_path="$(find "$tmpdir" -type f -name actionlint | head -n 1)"
+          if [[ -z "$actionlint_path" ]]; then
+            echo "actionlint binary not found in $TARBALL" >&2
+            exit 1
+          fi
+
+          sudo install -m 0755 "$actionlint_path" /usr/local/bin/actionlint
 
       - name: actionlint -version
         if: matrix.os != 'windows-latest'

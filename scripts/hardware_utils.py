@@ -322,7 +322,7 @@ class HardwareInfo:
                     except subprocess.CalledProcessError:
                         pass
 
-        except Exception as e:
+        except (subprocess.CalledProcessError, OSError, ValueError, FileNotFoundError, PermissionError) as e:
             logger.debug("Failed to get memory info for OS %s: %s", self.os_type, e)
 
         return memory
