@@ -6,12 +6,12 @@
 # Use bash with strict error handling for all recipes
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Internal helpers: ensure external tooling is installed
 _ensure-actionlint:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v actionlint >/dev/null || { echo "❌ 'actionlint' not found. See 'just setup' or https://github.com/rhysd/actionlint"; exit 1; }
 
-# Internal helpers: ensure external tooling is installed
 _ensure-jq:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -127,8 +127,8 @@ ci: check bench-compile test-all
 
 # CI with performance baseline
 ci-baseline tag="ci":
-    just ci
-    just perf-baseline {{tag}}
+    {{just_executable()}} ci
+    {{just_executable()}} perf-baseline {{tag}}
 
 # Clean build artifacts
 clean:
@@ -303,7 +303,7 @@ perf-report file="": _ensure-uv
 perf-trends days="7": _ensure-uv
     uv run performance-analysis --trends {{days}}
 
-python-check: python-typecheck
+python-check: _ensure-uv python-typecheck
     uv run ruff format --check scripts/
     uv run ruff check scripts/
 
@@ -358,6 +358,8 @@ setup:
                     ;;
                 actionlint|yamllint)
                     echo "    macOS: brew install $tool"
+                    echo "    pip: pip install $tool"
+                    echo "    uv: uv tool install $tool"
                     ;;
                 shfmt|shellcheck|jq|taplo)
                     echo "    macOS: brew install $tool"

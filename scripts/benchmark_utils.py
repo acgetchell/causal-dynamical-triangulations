@@ -2627,10 +2627,10 @@ def _find_downloaded_baseline_file(download_dir: Path) -> Path:
 
 
 def render_baseline_comparison(
-    project_root: Path,
     old_baseline: Path,
     new_baseline: Path,
     threshold: float = DEFAULT_REGRESSION_THRESHOLD,
+    project_root: Path | None = None,
 ) -> tuple[str, bool]:
     """Render a baseline-vs-baseline comparison report.
 
@@ -2648,7 +2648,7 @@ def render_baseline_comparison(
     old_hw = HardwareComparator.parse_baseline_hardware(old_content)
     hardware_report, _ = HardwareComparator.compare_hardware(new_hw, old_hw)
 
-    comparator = PerformanceComparator(project_root)
+    comparator = PerformanceComparator(project_root or Path())
     comparator.regression_threshold = threshold
     old_results = comparator.parse_baseline_file(old_content)
     new_results = comparator.parse_baseline_file(new_content)
@@ -2783,7 +2783,9 @@ class GitHubBaselineFetcher:
             attempt = 0
             while time.monotonic() < deadline:
                 attempt += 1
-                time.sleep(options.poll_seconds)
+                remaining = max(0.0, deadline - time.monotonic())
+                if remaining:
+                    time.sleep(min(options.poll_seconds, remaining))
 
                 if _try_download_any():
                     return _find_downloaded_baseline_file(out_dir)
@@ -3027,7 +3029,7 @@ def _cmd_compare_baselines(args: argparse.Namespace, project_root: Path) -> None
         sys.exit(3)
 
     try:
-        report_text, regression_found = render_baseline_comparison(project_root, args.old_baseline, args.new_baseline, args.threshold)
+        report_text, regression_found = render_baseline_comparison(args.old_baseline, args.new_baseline, args.threshold)
     except FileNotFoundError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(3)
@@ -3053,6 +3055,9 @@ def _cmd_fetch_baseline(args: argparse.Namespace, project_root: Path) -> None:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(3)
     except TimeoutError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
     except ExecutableNotFoundError as e:
@@ -3083,11 +3088,14 @@ def _cmd_compare_tags(args: argparse.Namespace, project_root: Path) -> None:
         old_baseline = fetcher.fetch_baseline(tag_name=args.old_tag, out_dir=old_dir, options=options)
         new_baseline = fetcher.fetch_baseline(tag_name=args.new_tag, out_dir=new_dir, options=options)
 
-        report_text, regression_found = render_baseline_comparison(project_root, old_baseline, new_baseline, args.threshold)
+        report_text, regression_found = render_baseline_comparison(old_baseline, new_baseline, args.threshold)
     except FileNotFoundError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(3)
     except TimeoutError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
     except ExecutableNotFoundError as e:

@@ -879,6 +879,15 @@ class ChangelogUtils:
             "npm ",
             "npx ",
             "make ",
+            "def ",
+            "class ",
+            "func ",
+            "package ",
+            "module ",
+            "var ",
+            "let ",
+            "const ",
+            "interface ",
         )
         code_markers = (
             "::",
@@ -905,6 +914,10 @@ class ChangelogUtils:
             # Treat assignment/config lines as code, but avoid classifying any line that
             # merely *contains* '=' somewhere in the middle of prose.
             if re.match(r"^[A-Za-z_][A-Za-z0-9_.-]*\s*=\s*\S", stripped):
+                return True
+
+            # Detect function/method declarations: identifier followed by () (Python, Go, etc.)
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(", stripped) or stripped.endswith(":"):
                 return True
 
             # Single-token lines inside indented blocks are more likely to be code/output

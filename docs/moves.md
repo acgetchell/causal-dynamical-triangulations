@@ -38,7 +38,7 @@ Key methods:
 Owns a `MoveStatistics` instance and a thread-local RNG. Public API:
 
 - `new()` / `Default::default()` — construct
-- `select_random_move() -> MoveType` — currently samples uniformly from all four move types (temporary strategy; uniform-per-type sampling can bias the chain — a production implementation should weight moves by available application sites, e.g. count of valid edges/triangles per move type)
+- `select_random_move() -> MoveType` — samples uniformly from all four move types
 - `attempt_22_move(triangulation) -> MoveResult`
 - `attempt_13_move(triangulation) -> MoveResult`
 - `attempt_31_move(triangulation) -> MoveResult`
@@ -58,7 +58,7 @@ When the `delaunay` crate exposes `try_edge_flip` / `try_bistellar_flip`, the pl
 
 ## Planned Work
 
-- [ ] Implement `try_edge_flip()` in `delaunay` for (2,2) moves (used by `EdgeFlip` / `attempt_edge_flip()`)
+- [ ] Implement `try_edge_flip()` in `delaunay` for (2,2) moves (used by `Move22` / `attempt_22_move()` and by `EdgeFlip` / `attempt_edge_flip()`)
 - [ ] Implement `try_bistellar_flip()` in `delaunay` for (1,3)/(3,1) moves (used by `attempt_13_move()` / `attempt_31_move()`)
 - [ ] Replace placeholder bodies with real geometric operations
 - [ ] Add causality and time-slice constraint validation
