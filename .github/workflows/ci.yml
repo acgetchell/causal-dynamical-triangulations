@@ -58,7 +58,7 @@ jobs:
 
       - name: Install just
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: just
 
@@ -81,19 +81,19 @@ jobs:
 
       - name: Install typos-cli
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: typos-cli@${{ env.TYPOS_VERSION }}
 
       - name: Install dprint (for markdown/JSON/YAML formatting)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: dprint@${{ env.DPRINT_VERSION }}
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: taplo-cli
 
