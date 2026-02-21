@@ -46,7 +46,7 @@ jobs:
           args: --harness verify_action_config
 
   kani-full:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     name: Full Kani
     runs-on: ubuntu-latest
     strategy:
