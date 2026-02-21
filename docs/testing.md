@@ -4,9 +4,10 @@
 
 ### Existing Tests
 
-- **Integration tests** (`tests/integration_tests.rs`): 9 tests covering simulation workflows, topology, caching, error handling
-- **CLI tests** (`tests/cli.rs`): 5 tests for command-line interface
-- **Unit tests**: Scattered across modules with varying coverage
+- **Unit tests** (`src/**`): 155 tests spread across all source modules
+- **Integration tests** (`tests/integration_tests.rs`): 8 tests covering simulation workflows, topology, caching, error handling
+- **CLI tests** (`tests/cli.rs`): 10 tests for command-line interface and validation
+- **Python tests** (`scripts/tests/`): 408 tests for benchmark, changelog, and hardware utilities
 
 ### Coverage Gaps Identified
 
@@ -163,7 +164,7 @@ This command requires the [`actionlint`](https://github.com/rhysd/actionlint) bi
 
 ## Next Steps
 
-1. Run `just coverage` to regenerate `tarpaulin-report.json` (HTML output lives in `target/tarpaulin/`) and use `just coverage-report` for a quick JSON summary whenever that file is available. If you only need the summary and the JSON already exists, you can skip regenerating coverage.
-2. Prioritize testing unimplemented TriangulationMut operations
+1. Run `cargo tarpaulin --out Json` to generate `tarpaulin-report.json`, then use `just coverage-report` for a per-file coverage summary. For an HTML report, run `just coverage` instead (output: `target/tarpaulin/tarpaulin-report.html`).
+2. Prioritize testing unimplemented ergodic move operations
 3. Add integration tests for complete simulation workflows with moves
 4. Set up CI to track coverage trends over time

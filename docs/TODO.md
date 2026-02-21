@@ -66,10 +66,9 @@ This document tracks all the pending improvements, features, and technical debt 
 
 ### Testing Coverage
 
-- [ ] **Add integration tests**
-  - Test complete CDT simulation workflows
-  - Add benchmarking tests for performance regression detection
-  - Test edge cases in triangulation generation
+- [x] **Add integration tests** — 8 integration tests + 10 CLI tests + 155 unit tests + 408 Python tests
+  - Complete CDT simulation workflow covered
+  - Edge cases in triangulation generation covered
 
 - [ ] **Improve unit test coverage**
   - Add tests for error conditions and edge cases
@@ -130,10 +129,10 @@ This document tracks all the pending improvements, features, and technical debt 
 
 ### Build System
 
-- [ ] **CI/CD improvements**
-  - Add performance regression testing
-  - Implement automated benchmarking
-  - Add more comprehensive linting checks
+- [x] **CI/CD improvements**
+  - Performance regression testing via `benchmark_utils.py` + GitHub Actions
+  - Automated benchmarking with Criterion.rs baselines
+  - Comprehensive linting: clippy, ruff, mypy, ty, shellcheck, yamllint, actionlint, dprint, typos, taplo
 
 ## Future Research Directions
 
@@ -165,4 +164,4 @@ This document tracks all the pending improvements, features, and technical debt 
 - Some items may require significant research and development effort
 - Regular review and updating of this list is recommended as the project evolves
 
-Last updated: 2025-10-02
+Last updated: 2026-02-21

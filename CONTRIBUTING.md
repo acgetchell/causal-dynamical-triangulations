@@ -37,7 +37,7 @@ Our community is built on the principles of:
 
 Before you begin, ensure you have:
 
-1. **Rust 1.92.0** (pinned via `rust-toolchain.toml` - automatically handled by rustup)
+1. **Rust 1.93.0** (pinned via `rust-toolchain.toml` - automatically handled by rustup)
 2. **Git** for version control
 3. **Just** (command runner): `cargo install just`
 4. **Kani verifier** (for formal verification): See setup instructions below
@@ -74,7 +74,7 @@ Before you begin, ensure you have:
    cargo test --test integration_tests  # Integration tests
 
    # Or use convenient workflows:
-   just dev             # Quick development cycle
+   just fix             # Apply formatters/auto-fixes
    just test-all        # All tests
    ```
 
@@ -112,7 +112,8 @@ Before you begin, ensure you have:
    just --list
 
    # Common workflows
-   just dev             # Quick development cycle (format, lint, test)
+   just fix             # Apply formatters/auto-fixes
+   just check           # Run all linters/validators
    just commit-check    # Full pre-commit validation
    just ci              # CI parity (mirrors .github/workflows/ci.yml)
    ```
@@ -125,7 +126,7 @@ Before you begin, ensure you have:
 
 When you enter the project directory, `rustup` will automatically:
 
-- **Install the correct Rust version** (1.92.0) if you don't have it
+- **Install the correct Rust version** (1.93.0) if you don't have it
 - **Switch to the pinned version** for this project
 - **Install required components** (clippy, rustfmt, rust-docs, rust-src, rust-analyzer)
 - **Add cross-compilation targets** for supported platforms
@@ -140,7 +141,7 @@ When you enter the project directory, `rustup` will automatically:
 **First time in the project?** You'll see:
 
 ```text
-info: syncing channel updates for '1.92.0-<your-platform>'
+info: syncing channel updates for '1.93.0-<your-platform>'
 info: downloading component 'cargo'
 info: downloading component 'clippy'
 ...
@@ -203,7 +204,6 @@ This project uses [Just] as the primary task automation tool. Just provides bett
 just setup          # Complete environment setup
 just fix            # Apply formatters/auto-fixes (mutating)
 just check          # Run linters/validators (non-mutating)
-just dev            # Quick development cycle (fix + clippy + tests)
 just ci             # CI parity (mirrors .github/workflows/ci.yml)
 just commit-check   # Comprehensive pre-commit validation (recommended before pushing)
 just lint           # Lint code, docs, and config (checks only)
@@ -233,7 +233,8 @@ just help-workflows  # Detailed workflow guidance
 
    ```bash
    # Make changes to code
-   just dev             # Format, lint, and test quickly
+   just fix             # Apply formatters/auto-fixes
+   just test            # Run fast tests (lib + doc)
    # Repeat until satisfied
    ```
 
@@ -255,8 +256,8 @@ just help-workflows  # Detailed workflow guidance
 
 ### Rust Code Style
 
-- **Edition**: Rust 2021
-- **MSRV**: Rust 1.92.0 (pinned in `rust-toolchain.toml`)
+- **Edition**: Rust 2024
+- **MSRV**: Rust 1.93.0 (pinned in `rust-toolchain.toml`)
 - **Formatting**: Use `rustfmt` (configured in `rustfmt.toml`)
 - **Linting**: Strict clippy with warnings as errors
 
@@ -405,7 +406,7 @@ cargo kani --harness verify_action_calculation
 just kani-fast
 ```
 
-**Toolchain note:** Kani bundles its own nightly and ignores `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for consistency; normal builds/tests still use the workspace MSRV (1.92.0).
+**Toolchain note:** Kani bundles its own nightly and ignores `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for consistency; normal builds/tests still use the workspace MSRV (1.93.0).
 
 **Not a Cargo dependency:** The verifier is installed as a binary (`cargo install ... kani-verifier`), not as a crate dependency, so you will not see it in `Cargo.toml`.
 
