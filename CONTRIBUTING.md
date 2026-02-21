@@ -1,8 +1,6 @@
 # Contributing to Causal Dynamical Triangulations
 
-Thank you for your interest in contributing to the [**causal-dynamical-triangulations**][cdt-lib] library!
-This document provides comprehensive guidelines for contributors, from first-time contributors
-to experienced developers looking to contribute significant features.
+Thank you for your interest in contributing to the [**causal-dynamical-triangulations**][cdt-lib] library! This document provides comprehensive guidelines for contributors, from first-time contributors to experienced developers looking to contribute significant features.
 
 ## Table of Contents
 
@@ -24,8 +22,7 @@ to experienced developers looking to contribute significant features.
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our commitment to creating an inclusive and welcoming environment for quantum gravity
-research and computational physics development.
+This project and everyone participating in it is governed by our commitment to creating an inclusive and welcoming environment for quantum gravity research and computational physics development.
 
 Our community is built on the principles of:
 
@@ -61,7 +58,7 @@ Before you begin, ensure you have:
    ```bash
    # Comprehensive setup (recommended)
    just setup           # Installs Kani verifier and builds project
-   
+
    # Manual setup (Kani is optional unless you're running verification)
    cargo install --locked --force --version 0.66.0 kani-verifier
    cargo kani --version
@@ -75,7 +72,7 @@ Before you begin, ensure you have:
    cargo test            # Library tests
    cargo test --test cli # CLI tests
    cargo test --test integration_tests  # Integration tests
-   
+
    # Or use convenient workflows:
    just dev             # Quick development cycle
    just test-all        # All tests
@@ -93,7 +90,7 @@ Before you begin, ensure you have:
    ```bash
    # Compile benchmarks without running
    cargo bench --no-run
-   
+
    # Run all benchmarks
    cargo bench
    ```
@@ -113,7 +110,7 @@ Before you begin, ensure you have:
    ```bash
    # See all available commands
    just --list
-   
+
    # Common workflows
    just dev             # Quick development cycle (format, lint, test)
    just commit-check    # Full pre-commit validation
@@ -408,8 +405,7 @@ cargo kani --harness verify_action_calculation
 just kani-fast
 ```
 
-**Toolchain note:** Kani bundles its own nightly and ignores `rust-toolchain.toml`. We install `kani-verifier` 0.66.0
-(bundled rustc 1.93.0-nightly) for consistency; normal builds/tests still use the workspace MSRV (1.92.0).
+**Toolchain note:** Kani bundles its own nightly and ignores `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for consistency; normal builds/tests still use the workspace MSRV (1.92.0).
 
 **Not a Cargo dependency:** The verifier is installed as a binary (`cargo install ... kani-verifier`), not as a crate dependency, so you will not see it in `Cargo.toml`.
 

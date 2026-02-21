@@ -21,14 +21,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from subprocess_utils import run_safe_command
+    from subprocess_utils import ExecutableNotFoundError, run_safe_command
 else:
     try:
         # When executed as a script from scripts/
-        from subprocess_utils import run_safe_command
+        from subprocess_utils import ExecutableNotFoundError, run_safe_command
     except ModuleNotFoundError:
         # When imported as a module (e.g., scripts.hardware_utils)
-        from scripts.subprocess_utils import run_safe_command
+        from scripts.subprocess_utils import ExecutableNotFoundError, run_safe_command
 
 # Configure a module-level logger
 logger = logging.getLogger(__name__)
@@ -327,9 +327,12 @@ class HardwareInfo:
 
         return memory
 
-    def get_rust_info(self) -> tuple[str, str]:
-        """
-        Get Rust toolchain information.
+    def get_rust_info(self, cwd: Path | None = None) -> tuple[str, str]:
+        """Get Rust toolchain information.
+
+        Args:
+            cwd: Working directory for rustc commands. This matters when rustup selects a
+                toolchain based on `rust-toolchain.toml` in the directory tree.
 
         Returns:
             Tuple of (rust_version, rust_target)
@@ -339,24 +342,26 @@ class HardwareInfo:
 
         try:
             if shutil.which("rustc"):
-                rust_version = self._run_command(["rustc", "--version"])
+                rust_version = self._run_command(["rustc", "--version"], cwd=cwd)
 
                 # Get target architecture
-                rustc_verbose = self._run_command(["rustc", "-vV"])
+                rustc_verbose = self._run_command(["rustc", "-vV"], cwd=cwd)
                 for line in rustc_verbose.split("\n"):
                     if line.startswith("host:"):
                         rust_target = line.split(":", 1)[1].strip()
                         break
         except subprocess.CalledProcessError as e:
             logger.debug("rustc command failed: %s", e)
-        except (FileNotFoundError, PermissionError, ValueError) as e:
+        except (OSError, ExecutableNotFoundError) as e:
             logger.debug("Failed to get Rust info: %s", e)
 
         return rust_version, rust_target
 
-    def get_hardware_info(self) -> dict[str, str]:
-        """
-        Get comprehensive hardware information.
+    def get_hardware_info(self, cwd: Path | None = None) -> dict[str, str]:
+        """Get comprehensive hardware information.
+
+        Args:
+            cwd: Working directory used for rustc metadata collection.
 
         Returns:
             Dictionary with hardware information
@@ -368,7 +373,7 @@ class HardwareInfo:
 
         cpu_model, cpu_cores, cpu_threads = self.get_cpu_info()
         memory = self.get_memory_info()
-        rust_version, rust_target = self.get_rust_info()
+        rust_version, rust_target = self.get_rust_info(cwd=cwd)
 
         return {
             "OS": os_name,
@@ -380,18 +385,18 @@ class HardwareInfo:
             "TARGET": rust_target,
         }
 
-    def format_hardware_info(self, info: dict[str, str] | None = None) -> str:
-        """
-        Format hardware information as a readable block.
+    def format_hardware_info(self, info: dict[str, str] | None = None, *, cwd: Path | None = None) -> str:
+        """Format hardware information as a readable block.
 
         Args:
             info: Hardware info dict. If None, gets current info.
+            cwd: Working directory used for rustc metadata collection.
 
         Returns:
             Formatted hardware information string
         """
         if info is None:
-            info = self.get_hardware_info()
+            info = self.get_hardware_info(cwd=cwd)
 
         return f"""Hardware Information:
   OS: {info["OS"]}
@@ -404,12 +409,12 @@ class HardwareInfo:
 
 """
 
-    def _run_command(self, cmd: list[str]) -> str:
-        """
-        Run a command and return its output using secure subprocess wrapper.
+    def _run_command(self, cmd: list[str], cwd: Path | None = None) -> str:
+        """Run a command and return its output using secure subprocess wrapper.
 
         Args:
             cmd: Command to run as list
+            cwd: Working directory for the command
 
         Returns:
             Command output as string
@@ -424,7 +429,8 @@ class HardwareInfo:
         command_name = cmd[0]
         args = cmd[1:] if len(cmd) > 1 else []
 
-        result = run_safe_command(command_name, args, capture_output=True, text=True, check=True)
+        result = run_safe_command(command_name, args, cwd=cwd, capture_output=True, text=True, check=True)
+
         return result.stdout.strip()
 
 
@@ -637,6 +643,7 @@ def main():
     parser.add_argument("command", choices=["info", "kv", "compare"], help="Command to run")
     parser.add_argument("--baseline-file", help="Path to baseline file (required for 'compare' command)")
     parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    parser.add_argument("--cwd", type=Path, default=None, help="Working directory for rustc/rustup commands (affects toolchain selection)")
 
     args = parser.parse_args()
 
@@ -644,14 +651,14 @@ def main():
 
     if args.command == "info":
         if args.json:
-            info = hardware.get_hardware_info()
+            info = hardware.get_hardware_info(cwd=args.cwd)
             print(json.dumps(info, indent=2))
         else:
-            formatted_info = hardware.format_hardware_info()
+            formatted_info = hardware.format_hardware_info(cwd=args.cwd)
             print(formatted_info, end="")
 
     elif args.command == "kv":
-        info = hardware.get_hardware_info()
+        info = hardware.get_hardware_info(cwd=args.cwd)
         for key, value in info.items():
             print(f"{key}={value}")
 
@@ -667,7 +674,7 @@ def main():
 
         try:
             baseline_content = baseline_path.read_text(encoding="utf-8", errors="replace")
-            current_info = hardware.get_hardware_info()
+            current_info = hardware.get_hardware_info(cwd=args.cwd)
             baseline_info = HardwareComparator.parse_baseline_hardware(baseline_content)
 
             report, has_warnings = HardwareComparator.compare_hardware(current_info, baseline_info)

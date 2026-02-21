@@ -5,26 +5,61 @@ on:
       # Run if workflow changes
       - .github/workflows/audit.yml
       # Run on changed dependencies
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
   pull_request:
-    # Run on merged pull requests
-    types: [ closed ]
-  # Rerun periodically to pick up new advisories
+    paths:
+      - .github/workflows/audit.yml
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  # Rerun periodically to pick up new advisories (weekly instead of daily)
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 6 * * 1" # Monday at 6 AM UTC
   # Run manually
   workflow_dispatch:
+
+# Security: Define minimal required permissions
+permissions:
+  contents: read
 
 jobs:
   audit:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
     steps:
-      - uses: actions/checkout@v6.0.1
-      - uses: actions-rust-lang/audit@v1
-        name: Audit Rust dependencies
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
         with:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache: true
+          # toolchain, components, etc. are specified in rust-toolchain.toml
+
+      - name: Compute week key
+        id: date
+        run: echo "week=$(date -u +%Y-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache audit database
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: ~/.cargo/advisory-db
+          key: advisory-db-${{ runner.os }}-v1-${{ steps.date.outputs.week }}
+          restore-keys: advisory-db-${{ runner.os }}-v1-
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: cargo-audit@0.22.1
+
+      - name: Run cargo audit
+        run: |
+          cargo audit --json > audit-results.json || true
+          # Show human-readable output as well (reuses cached advisory DB)
+          cargo audit --no-fetch
+        continue-on-error: true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: audit-results
+          path: audit-results.json

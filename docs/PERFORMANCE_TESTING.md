@@ -37,7 +37,7 @@ just perf-trends 7
 The performance analysis categorizes benchmark changes:
 
 - 🔴 **Regressions**: Performance degraded beyond threshold
-- 🟢 **Improvements**: Performance improved beyond threshold  
+- 🟢 **Improvements**: Performance improved beyond threshold
 - ✅ **Stable**: Changes within acceptable range
 - 🆕 **New**: First-time benchmarks
 
@@ -187,7 +187,7 @@ You can manually trigger performance analysis from GitHub Actions:
    New: 0
 ```
 
-#### Performance Regression Detected ❌  
+#### Performance Regression Detected ❌
 
 ```text
 🔴 Performance regressions detected!
@@ -206,10 +206,10 @@ The CI will:
 ### Critical Benchmarks (Strict Thresholds)
 
 - **Triangulation Creation**: Core algorithm performance
-- **Action Calculations**: Physics computation efficiency  
+- **Action Calculations**: Physics computation efficiency
 - **Cached Operations**: Memory/caching system performance
 
-### Standard Benchmarks  
+### Standard Benchmarks
 
 - **Geometry Queries**: Mesh interrogation operations
 - **Ergodic Moves**: Monte Carlo move operations
@@ -264,8 +264,9 @@ Include performance results in your PR description:
 
 ```markdown
 ## Performance Impact
+
 - Triangulation creation: **25% faster** (8.2ms → 6.1ms)
-- Memory usage: **15% reduction** in peak allocation  
+- Memory usage: **15% reduction** in peak allocation
 - Cache hit rate: **Improved from 85% to 94%**
 ```
 
@@ -349,17 +350,17 @@ just perf-check 5.0   # Strict threshold before completion
 
 ### Threshold Guidelines
 
-|Change Type|Recommended Threshold|Rationale|
-|-----------|---------------------|----------|
-|Bug fixes|5%|Should not impact performance significantly|
-|New features|10-15%|May have some performance cost|
-|Optimizations|3%|Should show measurable improvement|
-|Experimental|20%|Exploratory changes, focus on functionality|
+| Change Type   | Recommended Threshold | Rationale                                   |
+| ------------- | --------------------- | ------------------------------------------- |
+| Bug fixes     | 5%                    | Should not impact performance significantly |
+| New features  | 10-15%                | May have some performance cost              |
+| Optimizations | 3%                    | Should show measurable improvement          |
+| Experimental  | 20%                   | Exploratory changes, focus on functionality |
 
 ### Baseline Management
 
 - **Main branch baselines**: Automatically saved on merge
-- **Feature baselines**: Manually saved with descriptive tags  
+- **Feature baselines**: Manually saved with descriptive tags
 - **Release baselines**: Tagged with version numbers
 - **Retention**: Last 10 baselines kept automatically
 
@@ -368,7 +369,7 @@ just perf-check 5.0   # Strict threshold before completion
 ### Components
 
 1. **Criterion Benchmarks** (`benches/cdt_benchmarks.rs`): Core benchmark definitions
-2. **Performance Analyzer** (`scripts/performance_analysis.py`): Analysis and reporting engine  
+2. **Performance Analyzer** (`scripts/performance_analysis.py`): Analysis and reporting engine
 3. **Justfile Integration**: User-friendly command interface
 4. **GitHub Actions** (`.github/workflows/performance.yml`): CI/CD automation
 5. **Baseline Storage** (`performance_baselines/`): Historical performance data

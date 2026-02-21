@@ -424,6 +424,21 @@ class ChangelogUtils:
         return ChangelogUtils._format_entries(entries, commit_sha, repo_url)
 
     @staticmethod
+    def format_commit_body(commit_sha: str) -> list[str]:
+        """Format a commit message body for inclusion under an existing bullet.
+
+        This is used for non-PR (non-squash-merge) commits so that their commit
+        message bodies are included in the changelog while staying markdownlint
+        compliant (line wrapping, list indentation, no fenced code blocks).
+        """
+        commit_msg = ChangelogUtils._get_commit_message(commit_sha)
+        body_lines = ChangelogUtils._extract_content_lines(commit_msg)
+        if not body_lines:
+            return []
+        max_line_length = ChangelogUtils.get_markdown_line_limit()
+        return ChangelogUtils._format_entry_body(body_lines, max_line_length)
+
+    @staticmethod
     def _get_commit_message(commit_sha: str) -> str:
         """
         Get the full commit message for a given SHA.
@@ -458,14 +473,22 @@ class ChangelogUtils:
         lines = commit_msg.strip().split("\n")
         content_lines: list[str] = []
 
-        # Skip the first line (PR title) and empty lines at start
+        # Skip the first line (PR title) and empty lines at start.
         trailer_re = re.compile(
-            r"^\s*(Co-authored-by|Signed-off-by|Change-Id|Reviewed-on|Reviewed-by|Refs|See-Also):",
+            r"^\s*(Co-authored-by|Signed-off-by|Change-Id|Reviewed-on|Reviewed-by|See-Also):",
             re.I,
         )
+        refs_re = re.compile(r"^\s*Refs:\s*(?P<refs>.*)$", re.I)
+
         for line in lines[1:]:
             if trailer_re.match(line):
                 continue
+
+            # Keep issue-style references ("Refs: #123"), but drop branch-like refs
+            # ("Refs: feature/foo") which are not stable release notes.
+            if (m := refs_re.match(line)) and "#" not in m.group("refs"):
+                continue
+
             if line.strip() or content_lines:
                 content_lines.append(line)
 
@@ -656,11 +679,17 @@ class ChangelogUtils:
         Returns:
             List of lines with setext headings converted to ATX style
         """
-        result = []
+        result: list[str] = []
         i = 0
         while i < len(body_lines):
             # Check if the next line is a setext underline
             if i + 1 < len(body_lines):
+                # Never treat indented code blocks as headings.
+                if body_lines[i].startswith("    ") or body_lines[i + 1].startswith("    "):
+                    result.append(body_lines[i])
+                    i += 1
+                    continue
+
                 current_line = body_lines[i].strip()
                 next_line = body_lines[i + 1].strip()
 
@@ -746,6 +775,31 @@ class ChangelogUtils:
 
         return re.sub(r"https?://[^\s<>()]+", repl, line)
 
+    @staticmethod
+    def _strip_heading_like_emphasis(line: str) -> str:
+        """Strip full-line emphasis used as pseudo-headings.
+
+        Markdownlint MD036 flags lines that are *only* emphasis (e.g. '*Title*')
+        because they are often used as headings. Commit message bodies sometimes
+        contain these, so we normalize to plain text.
+        """
+        stripped = line.strip()
+        for marker in ("*", "_"):
+            for n in (3, 2, 1):
+                token = marker * n
+                if not (stripped.startswith(token) and stripped.endswith(token)):
+                    continue
+                if len(stripped) <= 2 * n:
+                    continue
+                inner = stripped[n:-n].strip()
+                if not inner:
+                    continue
+                # Avoid stripping when the line contains multiple emphasis segments.
+                if token in inner:
+                    continue
+                return inner
+        return line
+
     @classmethod
     def _process_body_line(cls, line: str) -> str:
         """Process a single body line: protect crons, downgrade headers, wrap URLs.
@@ -763,11 +817,155 @@ class ChangelogUtils:
         # Normal text: strip, then process
         processed = cls._protect_cron_expressions(line.strip())
         processed = cls._downgrade_headers(processed)
-        return cls.wrap_bare_urls(processed)
+        processed = cls.wrap_bare_urls(processed)
+        return cls._strip_heading_like_emphasis(processed)
+
+    @staticmethod
+    def _convert_fenced_code_blocks_to_indented(body_lines: list[str]) -> list[str]:
+        """Convert fenced code blocks (```...```) to indented code blocks.
+
+        This repository's markdownlint config expects indented code blocks (MD046).
+        Commit message bodies occasionally include fenced blocks; normalize them so
+        changelog generation stays lint-clean.
+
+        We drop fence marker lines and indent contents by 4 spaces.
+        """
+        out: list[str] = []
+        in_fence = False
+
+        for line in body_lines:
+            stripped = line.lstrip()
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                continue
+
+            if in_fence:
+                # Avoid emitting whitespace-only lines (MD009). A blank line will split
+                # the indented block, which is acceptable in changelog rendering.
+                if not line.strip():
+                    out.append("")
+                else:
+                    out.append("    " + line)
+                continue
+
+            out.append(line)
+
+        if in_fence:
+            logging.debug("Unclosed fenced code block detected in commit body; output may be misformatted")
+
+        return out
+
+    @staticmethod
+    def _indented_block_looks_like_code(content_lines: list[str]) -> bool:
+        """Heuristically decide whether an indented block is actually code.
+
+        Some commit bodies indent wrapped prose by 4 spaces, which Markdown would
+        interpret as a code block. We keep indentation only when the block looks
+        code-like.
+        """
+        code_prefixes = (
+            "$ ",
+            "cargo ",
+            "just ",
+            "uv ",
+            "git ",
+            "python ",
+            "pytest ",
+            "ruff ",
+            "taplo ",
+            "jq ",
+            "curl ",
+            "wget ",
+            "npm ",
+            "npx ",
+            "make ",
+            "def ",
+            "class ",
+            "func ",
+            "package ",
+            "module ",
+            "var ",
+            "let ",
+            "const ",
+            "interface ",
+        )
+        code_markers = (
+            "::",
+            "->",
+            "=>",
+            "#[",
+            "//",
+            "{",
+            "}",
+        )
+
+        for line in content_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            lowered = stripped.lower()
+            if lowered.startswith(code_prefixes):
+                return True
+
+            if any(marker in stripped for marker in code_markers):
+                return True
+
+            # Treat assignment/config lines as code, but avoid classifying any line that
+            # merely *contains* '=' somewhere in the middle of prose.
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_.-]*\s*=\s*\S", stripped):
+                return True
+
+            # Detect function/method declarations: identifier followed by () (Python, Go, etc.)
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(", stripped) or stripped.endswith(":"):
+                return True
+
+            # Single-token lines inside indented blocks are more likely to be code/output
+            # (hashes, identifiers, paths) than wrapped prose. Require the token to contain
+            # a digit, punctuation commonly found in paths/versions, look like a hex hash, or
+            # be unusually long (>= 40 chars — likely a hash, path, or other code output).
+            if " " not in stripped and (
+                any(c in stripped for c in "0123456789/.-_") or re.match(r"^[0-9a-fA-F]{16,}$", stripped) or len(stripped) >= 40
+            ):
+                return True
+
+        return False
+
+    @classmethod
+    def _normalize_indented_blocks(cls, body_lines: list[str]) -> list[str]:
+        """Deindent 4-space blocks that are likely wrapped prose (not code)."""
+        out: list[str] = []
+        block: list[str] = []
+
+        def flush() -> None:
+            nonlocal block
+            if not block:
+                return
+
+            content = [line[4:] for line in block]
+            if cls._indented_block_looks_like_code(content):
+                out.extend(block)
+            else:
+                for line in content:
+                    out.append(line if line.strip() else "")
+            block = []
+
+        for line in body_lines:
+            if line.startswith("    ") and line.strip():
+                block.append(line)
+                continue
+
+            flush()
+            out.append(line if line.strip() else "")
+
+        flush()
+        return out
 
     @classmethod
     def _build_body_content(cls, body_lines: list[str]) -> list[str]:
         """Build body content from raw lines with processing."""
+        body_lines = cls._convert_fenced_code_blocks_to_indented(body_lines)
+        body_lines = cls._normalize_indented_blocks(body_lines)
         body_lines = cls._convert_setext_to_atx(body_lines)
         body_content: list[str] = []
         for line in body_lines:
@@ -780,11 +978,44 @@ class ChangelogUtils:
             body_content.pop()
         return body_content
 
+    @staticmethod
+    def _format_indented_code_block_line(line: str, max_line_length: int) -> list[str]:
+        """Format an indented code block line, enforcing line-length limits.
+
+        We avoid emitting whitespace-only lines (MD009) by collapsing them to a
+        blank line.
+        """
+        code_content = line[4:]
+        if not code_content.strip():
+            return [""]
+
+        prefix = "  "
+        code_prefix = prefix + "    "
+
+        candidate = code_prefix + code_content
+        if len(candidate) <= max_line_length:
+            return [candidate]
+
+        available = max(1, max_line_length - len(code_prefix))
+        chunks = [code_content[i : i + available] for i in range(0, len(code_content), available)]
+
+        wrapped: list[str] = []
+        for chunk in chunks:
+            trimmed = chunk.rstrip()
+            if not trimmed:
+                wrapped.append("")
+            else:
+                wrapped.append(code_prefix + trimmed)
+
+        return wrapped
+
     @classmethod
     def _format_body_line(cls, line: str, max_line_length: int) -> list[str]:
         """Format a single line for output (wrap or preserve as-is)."""
-        if line.startswith("    ") or "```" in line or re.search(r"\[.*\]\(.*\)", line):
-            return [f"  {line}"]  # Code blocks or markdown links - preserve as-is
+        if line.startswith("    "):
+            return cls._format_indented_code_block_line(line, max_line_length)
+        if re.search(r"\[.*\]\(.*\)", line):
+            return [f"  {line}"]  # Markdown links - preserve as-is
         return cls.wrap_markdown_line(line, max_line_length, "  ")  # Wrap regular text
 
     @classmethod
@@ -964,9 +1195,9 @@ class ChangelogUtils:
             try:
                 repo_url = ChangelogUtils.get_repository_url()
             except GitRepoError:
-                # Fallback: keep a stable link for this repository even when running in a
-                # minimal test environment without a configured `origin` remote.
-                repo_url = "https://github.com/acgetchell/causal-dynamical-triangulations"
+                # Fallback: keep a stable link even when running in a minimal test environment
+                # without a configured `origin` remote. Override via CHANGELOG_FALLBACK_URL.
+                repo_url = os.environ.get("CHANGELOG_FALLBACK_URL", "https://github.com/acgetchell/causal-dynamical-triangulations")
 
             short_message = f"""Version {version}
 
@@ -1198,7 +1429,7 @@ Examples:
   changelog-utils tag v0.4.2 --force     # Force recreate existing tag
 
 Intermediate files (when using --debug with generate):
-  - CHANGELOG.md.tmp (initial auto-changelog output)
+  - CHANGELOG.md.tmp (initial git-cliff output)
   - CHANGELOG.md.processed (after date processing)
   - CHANGELOG.md.processed.expanded (after PR expansion)
   - CHANGELOG.md.tmp2 (after AI enhancement)
@@ -1209,18 +1440,21 @@ This tool replaces both generate_changelog.sh and tag-from-changelog.sh.
 
 def _show_version() -> None:
     """Show version information."""
-    print("changelog-utils v0.1.0 (Python implementation)")
-    print("Part of causal-dynamical-triangulations-scripts package")
+    print("changelog-utils v0.4.1 (Python implementation)")
+    print("Part of causal-dynamical-triangulations")
 
 
 def _execute_changelog_generation(debug_mode: bool) -> None:
     """Execute the main changelog generation workflow."""
-    # Initialize file paths
-    file_paths = _initialize_file_paths()
+    file_paths: dict[str, Path] | None = None
 
     try:
         # Setup and validation
         project_root, original_cwd = _setup_project_environment()
+
+        # Use absolute paths rooted at the project directory so that error cleanup/restoration
+        # still works even after we restore the original working directory.
+        file_paths = _initialize_file_paths()
 
         try:
             # Core workflow steps
@@ -1229,7 +1463,7 @@ def _execute_changelog_generation(debug_mode: bool) -> None:
             _backup_existing_changelog(file_paths)
 
             # Execute processing pipeline
-            _run_auto_changelog(file_paths, project_root)
+            _run_git_cliff(file_paths, project_root)
             _post_process_dates(file_paths)
             _expand_squashed_commits(file_paths, repo_url)
             _enhance_with_ai(file_paths, project_root)
@@ -1243,17 +1477,15 @@ def _execute_changelog_generation(debug_mode: bool) -> None:
         finally:
             os.chdir(original_cwd)
 
-    except (ChangelogError, GitRepoError, VersionError):
-        _restore_backup_and_exit(file_paths)
-    except KeyboardInterrupt:
-        _restore_backup_and_exit(file_paths)
-    except Exception:
+    except (ChangelogError, GitRepoError, VersionError, KeyboardInterrupt, Exception) as exc:
+        if file_paths is None:
+            raise SystemExit(1) from exc
         _restore_backup_and_exit(file_paths)
 
 
 def _initialize_file_paths() -> dict[str, Path]:
     """Initialize file paths for changelog processing."""
-    changelog_file = Path("CHANGELOG.md")
+    changelog_file = Path("CHANGELOG.md").resolve()
     return {
         "changelog": changelog_file,
         "temp": changelog_file.with_suffix(".md.tmp"),
@@ -1278,31 +1510,27 @@ def _validate_prerequisites() -> None:
     ChangelogUtils.validate_git_repo()
     ChangelogUtils.check_git_history()
 
-    if not shutil.which("npx"):
+    if not shutil.which("git-cliff"):
         print(
-            "Error: npx not found. Install Node.js (which provides npx). See https://nodejs.org/",
+            "Error: git-cliff not found. Install via Homebrew (brew install git-cliff) or Cargo (cargo install git-cliff).",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    # Verify auto-changelog availability
+    # Verify git-cliff is runnable.
     try:
-        run_safe_command("npx", ["--yes", "-p", "auto-changelog", "auto-changelog", "--version"])
+        run_safe_command("git-cliff", ["--version"])
     except Exception:
         print(
-            "Error: auto-changelog is not available via npx. Verify network access and try again.",
+            "Error: git-cliff failed to run. Verify your installation and try again.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    # Verify configuration files
-    if not Path(".auto-changelog").exists():
-        print("Error: .auto-changelog config not found at project root.", file=sys.stderr)
-        sys.exit(1)
-
-    template_path = Path("docs/templates/changelog.hbs")
-    if not template_path.exists():
-        print(f"Error: changelog template missing: {template_path}", file=sys.stderr)
+    # Verify configuration file
+    config_path = Path("cliff.toml")
+    if not config_path.exists():
+        print(f"Error: git-cliff config not found at project root: {config_path}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -1311,9 +1539,10 @@ def _get_repository_url() -> str:
     try:
         return ChangelogUtils.get_repository_url()
     except GitRepoError:
-        fallback = "https://github.com/acgetchell/causal-dynamical-triangulations"
+        default_fallback = "https://github.com/acgetchell/causal-dynamical-triangulations"
+        fallback = os.environ.get("CHANGELOG_FALLBACK_URL", default_fallback)
         print(
-            f"Warning: Could not detect repository URL, using fallback: {fallback}",
+            f"Warning: Could not detect repository URL, using fallback: {fallback} (set CHANGELOG_FALLBACK_URL to override)",
             file=sys.stderr,
         )
         return fallback
@@ -1325,16 +1554,22 @@ def _backup_existing_changelog(file_paths: dict[str, Path]) -> None:
         shutil.copy2(file_paths["changelog"], file_paths["backup"])
 
 
-def _run_auto_changelog(file_paths: dict[str, Path], project_root: Path) -> None:
-    """Run auto-changelog to generate initial changelog."""
+def _run_git_cliff(file_paths: dict[str, Path], project_root: Path) -> None:
+    """Run git-cliff to generate the initial changelog."""
+    config_path = Path("cliff.toml")
     try:
-        result = run_safe_command("npx", ["--yes", "-p", "auto-changelog", "auto-changelog", "--stdout"], cwd=project_root)
+        result = run_safe_command("git-cliff", ["--config", str(config_path)], cwd=project_root)
         file_paths["temp"].write_text(result.stdout, encoding="utf-8")
     except subprocess.CalledProcessError as e:
         if e.stderr:
             print(e.stderr, file=sys.stderr)
-        print("Error: auto-changelog failed.", file=sys.stderr)
-        sys.exit(1)
+        print("Error: git-cliff failed.", file=sys.stderr)
+
+        details = (e.stderr or e.stdout or str(e) or "").strip()
+        msg = f"_run_git_cliff failed: git-cliff exited with status {e.returncode}"
+        if details:
+            msg = f"{msg}\n{details}"
+        raise ChangelogError(msg) from e
 
 
 def _post_process_dates(file_paths: dict[str, Path]) -> None:
@@ -1503,12 +1738,14 @@ def _rn_extract_commit_url(entry: list[str]) -> str | None:
     return None
 
 
-def _rn_remove_empty_section(lines: list[str], section_header: str) -> list[str]:
+def _rn_remove_empty_section(lines: list[str], section_headers: str | tuple[str, ...]) -> list[str]:
+    headers = {section_headers} if isinstance(section_headers, str) else set(section_headers)
+
     out: list[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
-        if line.strip() != section_header:
+        if line.strip() not in headers:
             out.append(line)
             i += 1
             continue
@@ -1554,7 +1791,7 @@ class _BreakingChangeDetector:
     # promote entries into the "⚠️ Breaking Changes" section, so prefer patterns that
     # strongly imply downstream-facing breakage.
     #
-    # cspell:ignore incompatib ility bincompatib bcompatib bdeprecat touchpoints
+    # NOTE: The fragments below are intentionally included to match common breaking-change wording.
     _BREAKING_TITLE_PATTERNS: tuple[re.Pattern[str], ...] = (
         # MSRV bumps are breaking for downstream users.
         re.compile(r"\bmsrv\b", re.IGNORECASE),
@@ -1591,13 +1828,14 @@ class _BreakingChangeDetector:
         breaking_entries: list[list[str]] = []
         i = 0
         in_changed = False
+        changed_headers = {"### Changed", "### Changes"}
 
         while i < len(lines):
             line = lines[i]
 
             # Track section boundaries
             if line.startswith("### "):
-                in_changed = line.strip() == "### Changed"
+                in_changed = line.strip() in changed_headers
                 out.append(line)
                 i += 1
                 continue
@@ -1616,7 +1854,7 @@ class _BreakingChangeDetector:
             out.append(line)
             i += 1
 
-        out = _rn_remove_empty_section(out, "### Changed")
+        out = _rn_remove_empty_section(out, ("### Changed", "### Changes"))
         # Trim trailing separator blanks added by entry writes
         while out and out[-1] == "":
             out.pop()
@@ -2129,7 +2367,7 @@ class ChangelogProcessor:
             return line
 
         # Handle commit lines with SHA patterns
-        return self._handle_commit_line(line)
+        return self._handle_commit_line(line, output_lines)
 
     def _handle_section_headers(self, line: str, output_lines: list[str]) -> bool:
         """Handle section header lines and update state accordingly."""
@@ -2170,7 +2408,7 @@ class ChangelogProcessor:
         self._process_pr_squashed_commit(pr_number)
         return True
 
-    def _handle_commit_line(self, line: str) -> str | None:
+    def _handle_commit_line(self, line: str, output_lines: list[str]) -> str | None:
         """Handle commit lines with SHA patterns."""
         commit_match = re.search(r"- \*\*.*?\*\*.*?\[`([a-f0-9]{7,40})`\]", line) or re.search(r"- .*?\(#[0-9]+\) \[`([a-f0-9]{7,40})`\]", line)
 
@@ -2183,7 +2421,7 @@ class ChangelogProcessor:
         if commit_sha in self.expanded_commit_shas:
             return None  # Skip this line to avoid duplication
 
-        return self._process_commit_sha(commit_sha, line)
+        return self._process_commit_sha(commit_sha, line, output_lines)
 
     def _process_pr_squashed_commit(self, pr_number: str) -> None:
         """Process a squashed commit for the given PR number."""
@@ -2210,19 +2448,46 @@ class ChangelogProcessor:
         except Exception as e:
             logging.debug("Failed to process PR squashed commit for PR #%s: %s", pr_number, e)
 
-    def _process_commit_sha(self, commit_sha: str, original_line: str) -> str:
-        """Process a commit SHA and return the appropriate line."""
+    def _process_commit_sha(self, commit_sha: str, original_line: str, output_lines: list[str]) -> str | None:
+        """Process a commit SHA and return the appropriate line (or append and skip)."""
         try:
-            result_output, _ = ChangelogUtils.run_git_command(["--no-pager", "show", commit_sha, "--format=%s", "--no-patch"])
+            result_output, _ = ChangelogUtils.run_git_command(
+                ["--no-pager", "show", commit_sha, "--format=%s", "--no-patch"],
+            )
             commit_subject = result_output.strip()
 
+            # Fallback: if a PR squash commit appears here, expand it inline.
             if re.search(r"\(#[0-9]+\)$", commit_subject):
-                return self._expand_squashed_commit_inline(commit_sha, original_line)
+                processed_commit = ChangelogUtils.process_squashed_commit(commit_sha, self.repo_url)
+                if processed_commit.strip():
+                    for expanded_line in processed_commit.split("\n"):
+                        output_lines.append(self._wrap_bare_urls(expanded_line))
+                    self.expanded_commit_shas.add(commit_sha)
+                    self.expanded_commit_shas.add(commit_sha[:7])
+                    return None
+                # Empty expansion: mark SHA as seen to prevent duplicate processing.
+                self.expanded_commit_shas.add(commit_sha)
+                self.expanded_commit_shas.add(commit_sha[:7])
+                return original_line
 
         except Exception as e:
             logging.debug("Failed to process commit SHA %s: %s", commit_sha, e)
+            return original_line
 
-        return original_line
+        # Non-PR commit: append its body under the existing bullet when present.
+        try:
+            body_lines = ChangelogUtils.format_commit_body(commit_sha)
+        except Exception as e:
+            logging.debug("Failed to format commit body for %s: %s", commit_sha, e)
+            return original_line
+
+        if not body_lines:
+            return original_line
+
+        output_lines.append(self._wrap_bare_urls(original_line))
+        for body_line in body_lines:
+            output_lines.append(self._wrap_bare_urls(body_line))
+        return None
 
     def _expand_squashed_commit(self, commit_sha: str) -> None:
         """Expand a squashed commit and add to pending commits."""

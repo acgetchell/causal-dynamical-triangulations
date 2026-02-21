@@ -1,5 +1,4 @@
 name: CI
-# cspell:ignore rhysd binstall mktemp sha256sum sha256sums shasum
 permissions:
   contents: read
 concurrency:
@@ -24,15 +23,16 @@ env:
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
   MARKDOWNLINT_VERSION: "0.47.0"
-  CSPELL_VERSION: "9.4.0"
+  DPRINT_VERSION: "0.51.1"
   SHFMT_VERSION: "3.12.0"
+  TYPOS_VERSION: "1.43.5"
   UV_VERSION: "0.9.21"
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false  # Continue other jobs if one fails
+      fail-fast: false # Continue other jobs if one fails
       matrix:
         os:
           - ubuntu-latest
@@ -47,41 +47,53 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c  # v1.15.2
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
         with:
           target: ${{ matrix.target }}
-          cache: true  # Built-in caching
-          # toolchain, components, etc. are specified in rust-toolchain.toml
+          cache: true # Built-in caching
+      # toolchain, components, etc. are specified in rust-toolchain.toml
 
       - name: Install just
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2.65.1
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
         with:
           tool: just
 
       - name: Install uv (for Python scripts and yamllint/ruff)
         if: matrix.os != 'windows-latest'
-        uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867  # v7.1.6
+        uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7.1.6
         with:
           version: ${{ env.UV_VERSION }}
 
-      - name: Install Node.js (for markdownlint and cspell)
+      - name: Install Node.js (for markdownlint)
         if: matrix.os != 'windows-latest'
         uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Node.js packages
         if: matrix.os != 'windows-latest'
         run: |
-          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }} cspell@${{ env.CSPELL_VERSION }}
+          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }}
+
+      - name: Install typos-cli
+        if: matrix.os != 'windows-latest'
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: typos-cli@${{ env.TYPOS_VERSION }}
+
+      - name: Install dprint (for markdown/JSON/YAML formatting)
+        if: matrix.os != 'windows-latest'
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: dprint@${{ env.DPRINT_VERSION }}
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2.65.1
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
         with:
           tool: taplo-cli
 
@@ -157,9 +169,9 @@ jobs:
       - name: Install additional tools (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          # Install shellcheck and jq
+          # Install shellcheck, jq, and yamllint
           sudo apt-get update
-          sudo apt-get install -y shellcheck jq
+          sudo apt-get install -y shellcheck jq yamllint
 
           # Install shfmt (pinned for CI consistency)
           SHFMT_ASSET="shfmt_v${SHFMT_VERSION}_linux_amd64"
@@ -190,8 +202,8 @@ jobs:
       - name: Install additional tools (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          # Install shellcheck and jq via Homebrew
-          brew install shellcheck jq
+          # Install shellcheck, jq, and yamllint via Homebrew
+          brew install shellcheck jq yamllint
 
           # Install shfmt (pinned for CI consistency with Linux)
           SHFMT_ARCH="amd64"

@@ -1,0 +1,48 @@
+[default]
+extend-ignore-re = [
+    # Ignore hex hashes (git commits, etc.)
+    "[0-9a-f]{7,40}",
+    # Ignore URLs
+    "https?://[^\\s]+",
+    # Ignore dimensional notation like <2D>, <3D>, <Nd>
+    "<[0-9]*[Dd]>",
+]
+
+[files]
+extend-exclude = [
+    "*.lock",
+    "*.min.js",
+    "target/",
+    "coverage/",
+    ".git/",
+    "CHANGELOG.md",
+]
+
+[default.extend-words]
+# Scientific/technical terms
+delaunay = "delaunay"
+triangulations = "triangulations"
+simplices = "simplices"
+timelike = "timelike"
+spacelike = "spacelike"
+foliation = "foliation"
+regge = "regge"
+ergodic = "ergodic"
+Nd = "Nd"
+
+# Project-specific
+CDT = "CDT"
+MSRV = "MSRV"
+crate = "crate"
+rustc = "rustc"
+
+# Tool names and usernames
+rhysd = "rhysd"
+binstall = "binstall"
+
+# Common abbreviations
+CI = "CI"
+CLI = "CLI"
+Vec = "Vec"
+yml = "yml"
+toml = "toml"

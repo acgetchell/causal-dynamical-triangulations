@@ -4,8 +4,7 @@ This document describes the comprehensive benchmarking suite for the Causal Dyna
 
 ## Overview
 
-The benchmarking suite measures performance of key CDT operations using the [criterion](https://crates.io/crates/criterion) benchmarking framework.
-The benchmarks are designed to track performance across different system sizes and identify performance regressions.
+The benchmarking suite measures performance of key CDT operations using the [criterion](https://crates.io/crates/criterion) benchmarking framework. The benchmarks are designed to track performance across different system sizes and identify performance regressions.
 
 ## Running Benchmarks
 
@@ -65,7 +64,7 @@ cargo bench -- --save-baseline my_baseline
 - **Metrics**: Time per triangulation, throughput (triangulations/second)
 - **Use Case**: Identifying scaling behavior for initial setup
 
-### 2. Edge Counting (`edge_counting`)  
+### 2. Edge Counting (`edge_counting`)
 
 - **Purpose**: Compares cached vs uncached edge counting performance
 - **Test Sizes**: 10, 25, 50, 100, 200 vertices
@@ -83,7 +82,7 @@ cargo bench -- --save-baseline my_baseline
   - `euler_characteristic`: Calculate V - E + F
   - `is_valid`: Validate triangulation
   - `iterate_vertices`: Iterate over all vertices
-  - `iterate_edges`: Iterate over all edges  
+  - `iterate_edges`: Iterate over all edges
   - `iterate_faces`: Iterate over all faces
 - **Use Case**: Profiling core geometry backend performance
 
@@ -143,7 +142,7 @@ cargo bench -- --save-baseline my_baseline
 ### Typical Performance Ranges (Debug Builds)
 
 - **Triangulation Creation**: ~100μs - 10ms (size-dependent)
-- **Cached Edge Count**: ~1μs - 10μs  
+- **Cached Edge Count**: ~1μs - 10μs
 - **Uncached Edge Count**: ~10μs - 1ms (size-dependent)
 - **Action Calculation**: ~100ns - 1μs
 - **Ergodic Move**: ~1μs - 100μs
@@ -184,7 +183,7 @@ cargo bench -- --profile-time=5
 
 - **Sample Size**: Automatically determined by criterion
 - **Measurement Time**: 5 seconds per benchmark
-- **Warmup Time**: 3 seconds  
+- **Warmup Time**: 3 seconds
 - **Confidence Level**: 95%
 - **Outlier Detection**: Automatic
 
@@ -251,7 +250,7 @@ cargo bench -- --save-baseline main
 ### Performance Monitoring
 
 - Track benchmark results over time
-- Set up alerts for significant performance regressions  
+- Set up alerts for significant performance regressions
 - Compare performance across different hardware configurations
 - Profile memory usage alongside timing benchmarks
 

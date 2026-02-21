@@ -1,87 +1,65 @@
-Ah, that **completely changes the equation**! Since you own the delaunay crate, implementing bistellar flips there and importing them here with
-physics-based constraints is actually the **optimal architectural approach**. Here's why this is the best strategy:
+# Ergodic Moves
 
-## Why This Approach is Ideal
+Ergodic moves are the local Monte Carlo updates that allow the triangulation to explore the space of geometries. This module implements the standard ergodic moves for 2D Causal Dynamical Triangulations (see `src/cdt/ergodic_moves.rs`).
 
-**1. Proper Layering:**
+## Types
 
-- **delaunay crate**: Pure computational geometry operations (bistellar flips, edge flips)
-- **CDT crate**: Physics constraints and domain-specific logic
+### `MoveType`
 
-**2. Maximum Reusability:**
+Enumerates the available move types:
 
-- Other computational geometry applications could benefit from bistellar flips
-- CDT gets optimized, well-tested geometric operations
-- Clean separation of concerns
+- `Move22` — (2,2) move: flip the shared edge between two triangles, preserving vertex count; causality-aware — the CDT layer validates and rejects moves that break causal layering
+- `Move13Add` — (1,3) move: insert a new vertex by subdividing one triangle into three
+- `Move31Remove` — (3,1) move: remove a vertex by merging three triangles into one
+- `EdgeFlip` — raw Delaunay edge flip maintaining the Delaunay property; no causal-layer enforcement (operates at the geometry level)
 
-**3. Performance Benefits:**
+### `MoveResult`
 
-- Geometric operations implemented once, optimally
-- No duplication of complex geometric algorithms
-- Potential for low-level optimizations in delaunay
+Returned by each `attempt_*` method:
 
-## Recommended Implementation Strategy
+- `Success` — move was applied
+- `CausalityViolation` — rejected because the move would break causal layering
+- `GeometricViolation` — rejected because the resulting triangulation would be geometrically invalid
+- `Rejected(CdtError)` — rejected for another reason, with details
 
-**In delaunay crate:**
+### `MoveStatistics`
 
-```rust
-impl<T, VertexData, CellData, const D: usize> Tds<T, VertexData, CellData, D> {
-    /// Attempts a bistellar flip (k,n-k) move
-    pub fn try_bistellar_flip(&mut self, simplex: SimplexHandle) -> Result<(), FlipError> {
-        // Pure geometric validation and execution
-        // No physics constraints - just geometry
-    }
-    
-    /// Edge flip (2,2) operation in 2D
-    pub fn try_edge_flip(&mut self, edge: EdgeHandle) -> Result<(), FlipError> {
-        // 2D-specific edge flipping
-    }
-}
-```
+Tracks per-move-type attempt and acceptance counts. Fields: `moves_22_attempted` / `moves_22_accepted`, `moves_13_attempted` / `moves_13_accepted`, `moves_31_attempted` / `moves_31_accepted`, `edge_flips_attempted` / `edge_flips_accepted`.
 
-**In CDT crate:**
+Key methods:
 
-```rust
-impl ErgodicsSystem {
-    pub fn attempt_22_move_tds(&mut self, tds: &mut Tds<...>) -> MoveResult {
-        // 1. CDT-specific pre-checks (causality, time slices)
-        if !self.validate_cdt_constraints(tds, edge) {
-            return MoveResult::CausalityViolation;
-        }
-        
-        // 2. Use delaunay's geometric operation
-        match tds.try_edge_flip(edge) {
-            Ok(()) => MoveResult::Success,
-            Err(FlipError::GeometricConstraint) => MoveResult::GeometricViolation,
-            Err(_) => MoveResult::Rejected(CdtError::ErgodicsFailure("...".into())),
-        }
-    }
-}
-```
+- `record_attempt(MoveType)` — increment the attempt counter
+- `record_success(MoveType)` — increment the acceptance counter
+- `acceptance_rate(MoveType) -> f64` — ratio for a single move type
+- `total_acceptance_rate() -> f64` — ratio across all move types
 
-## Implementation Priority
+### `ErgodicsSystem`
 
-**Phase 1 - delaunay crate:**
+Owns a `MoveStatistics` instance and a thread-local RNG. Public API:
 
-1. Implement `try_edge_flip()` for (2,2) moves
-2. Implement `try_bistellar_flip()` for (1,3)/(3,1) moves  
-3. Add comprehensive geometric validation
-4. Ensure robust error handling
+- `new()` / `Default::default()` — construct
+- `select_random_move() -> MoveType` — samples uniformly from all four move types
+- `attempt_22_move(triangulation) -> MoveResult`
+- `attempt_13_move(triangulation) -> MoveResult`
+- `attempt_31_move(triangulation) -> MoveResult`
+- `attempt_edge_flip(triangulation) -> MoveResult`
+- `attempt_random_move(triangulation) -> MoveResult` — delegates to one of the above
 
-**Phase 2 - CDT crate:**
+> **Note**: All `attempt_*` methods are currently placeholder implementations that simulate realistic acceptance rates. Full integration with the `delaunay` crate's `Tds` type is planned for a future release.
 
-1. Update delaunay dependency to new version
-2. Replace placeholder implementations with real geometric operations
-3. Add CDT-specific physics validation layers
-4. Implement causality and time slice constraints
+## Architecture
 
-## Benefits of This Approach
+Move validation follows a two-layer design:
 
-✅ **Optimal architecture** - geometry separated from physics  
-✅ **Reusable components** - other projects benefit from bistellar flips  
-✅ **Better testing** - geometric operations tested independently  
-✅ **Performance** - single, optimized implementation  
-✅ **Maintainability** - clear ownership boundaries  
-✅ **Future-proof** - enables other physics applications (Regge calculus, etc.)  
+- **`delaunay` crate** — pure geometric operations (bistellar flips, edge flips) with no physics constraints
+- **CDT crate** — wraps geometric operations with causality and time-slice validation
 
-This approach transforms the current quality issue (incomplete ergodic moves) into a well-architected, reusable solution that benefits both codebases.
+When the `delaunay` crate exposes `try_edge_flip` / `try_bistellar_flip`, the placeholder bodies will be replaced with calls to those methods guarded by CDT-specific pre-checks.
+
+## Planned Work
+
+- [ ] Implement `try_edge_flip()` in `delaunay` for (2,2) moves (used by `Move22` / `attempt_22_move()` and by `EdgeFlip` / `attempt_edge_flip()`)
+- [ ] Implement `try_bistellar_flip()` in `delaunay` for (1,3)/(3,1) moves (used by `attempt_13_move()` / `attempt_31_move()`)
+- [ ] Replace placeholder bodies with real geometric operations
+- [ ] Add causality and time-slice constraint validation
+- [ ] Weight `select_random_move()` by available application sites per move type to remove uniform-sampling chain bias

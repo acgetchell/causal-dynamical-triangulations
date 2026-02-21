@@ -6,8 +6,7 @@ This directory contains shell scripts that demonstrate how to use the `cdt` comm
 
 ### 1. `basic_simulation.sh`
 
-**Purpose**: Demonstrates a simple CDT simulation run
-**Usage**:
+**Purpose**: Demonstrates a simple CDT simulation run **Usage**:
 
 ```bash
 ./examples/scripts/basic_simulation.sh
@@ -23,8 +22,7 @@ This directory contains shell scripts that demonstrate how to use the `cdt` comm
 
 ### 2. `parameter_sweep.sh`
 
-**Purpose**: Runs systematic temperature sweep for phase transition studies
-**Usage**:
+**Purpose**: Runs systematic temperature sweep for phase transition studies **Usage**:
 
 ```bash
 ./examples/scripts/parameter_sweep.sh
@@ -41,8 +39,7 @@ This directory contains shell scripts that demonstrate how to use the `cdt` comm
 
 ### 3. `performance_test.sh`
 
-**Purpose**: Benchmarks CDT performance across different system sizes
-**Usage**:
+**Purpose**: Benchmarks CDT performance across different system sizes **Usage**:
 
 ```bash
 ./examples/scripts/performance_test.sh
