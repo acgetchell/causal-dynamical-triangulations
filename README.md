@@ -51,7 +51,8 @@ cargo build && cargo test
 # Modern approach (recommended) - install just command runner
 cargo install just
 just setup           # Complete environment setup (includes Kani)
-just dev             # Quick development cycle: format, lint, test
+just fix             # Apply formatters/auto-fixes
+just check           # Run all linters/validators
 just --list          # See all available development commands
 
 # Run examples
@@ -61,13 +62,12 @@ just run-example     # Basic simulation
 ./examples/scripts/performance_test.sh      # Performance benchmarking across system sizes
 ```
 
-`just setup` prints a checklist of external tools used by repository workflows (for example: `uv`, Node.js/`npx`, `taplo`, `actionlint`, `shfmt`, `shellcheck`, `jq`) and how to install them.
+`just setup` prints a checklist of external tools used by repository workflows (for example: `uv`, `taplo`, `actionlint`, `shfmt`, `shellcheck`, `jq`) and how to install them.
 
 **Just Workflows:**
 
 - `just fix` - Apply formatters/auto-fixes (mutating)
 - `just check` - Run linters/validators (non-mutating)
-- `just dev` - Quick development cycle (fix + clippy + tests)
 - `just ci` - CI parity (mirrors GitHub Actions workflow [`ci.yml`](.github/workflows/ci.yml))
 - `just commit-check` - Comprehensive pre-commit validation (includes Kani)
 
@@ -173,7 +173,7 @@ cargo kani --harness verify_action_config
 cargo kani --harness verify_regge_action_properties
 ```
 
-**Toolchain note:** Kani ships its own pinned nightly and does not read `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for reproducibility; regular builds/tests continue to use the workspace MSRV (1.92.0).
+**Toolchain note:** Kani ships its own pinned nightly and does not read `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for reproducibility; regular builds/tests continue to use the workspace MSRV (1.93.0).
 
 ### Workflow behavior
 

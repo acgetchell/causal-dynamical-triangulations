@@ -26,11 +26,6 @@ _ensure-git-cliff:
         exit 1
     }
 
-_ensure-npx:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v npx >/dev/null || { echo "❌ 'npx' not found. See 'just setup' or install Node.js (for npx tools): https://nodejs.org"; exit 1; }
-
 _ensure-dprint:
     #!/usr/bin/env bash
     set -euo pipefail

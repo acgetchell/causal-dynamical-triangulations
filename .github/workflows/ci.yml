@@ -22,7 +22,6 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
-  MARKDOWNLINT_VERSION: "0.47.0"
   DPRINT_VERSION: "0.51.1"
   SHFMT_VERSION: "3.12.0"
   TYPOS_VERSION: "1.43.5"
@@ -58,42 +57,31 @@ jobs:
 
       - name: Install just
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: just
 
       - name: Install uv (for Python scripts and yamllint/ruff)
         if: matrix.os != 'windows-latest'
-        uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7.1.6
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
         with:
           version: ${{ env.UV_VERSION }}
 
-      - name: Install Node.js (for markdownlint)
-        if: matrix.os != 'windows-latest'
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        with:
-          node-version: "20"
-
-      - name: Install Node.js packages
-        if: matrix.os != 'windows-latest'
-        run: |
-          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }}
-
       - name: Install typos-cli
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: typos-cli@${{ env.TYPOS_VERSION }}
 
       - name: Install dprint (for markdown/JSON/YAML formatting)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: dprint@${{ env.DPRINT_VERSION }}
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        uses: taiki-e/install-action@470679bc3a1580072dac4e67535d1aa3a3dcdf51 # v2.68.6
         with:
           tool: taplo-cli
 
