@@ -228,7 +228,7 @@ help-workflows:
     @echo "  just run-example    # Run with example arguments"
     @echo "  just run-simulation # Run basic_simulation.sh example script"
     @echo ""
-    @echo "Note: Some recipes require external tools. Run 'just setup-tools' (tooling) or 'just setup' (full env) first."
+    @echo "Note: Some recipes require external tools. Run 'just setup' for full environment setup."
 
 # Kani formal verification
 kani:
@@ -303,10 +303,9 @@ perf-report file="": _ensure-uv
 perf-trends days="7": _ensure-uv
     uv run performance-analysis --trends {{days}}
 
-python-check: _ensure-uv
+python-check: python-typecheck
     uv run ruff format --check scripts/
     uv run ruff check scripts/
-    just python-typecheck
 
 # Python code quality
 python-fix: _ensure-uv
@@ -346,7 +345,7 @@ setup:
     rustup component add clippy rustfmt rust-docs rust-src
     echo ""
     echo "Additional tools (will check if installed):"
-    for tool in uv actionlint shfmt shellcheck jq taplo yamllint dprint typos cargo-tarpaulin; do
+    for tool in uv actionlint shfmt shellcheck jq taplo yamllint dprint typos cargo-tarpaulin git-cliff; do
         if command -v "$tool" &> /dev/null; then
             echo "  ✓ $tool installed"
         else
@@ -374,6 +373,10 @@ setup:
                     ;;
                 cargo-tarpaulin)
                     echo "    Install: cargo install cargo-tarpaulin"
+                    ;;
+                git-cliff)
+                    echo "    macOS: brew install git-cliff"
+                    echo "    Or: cargo install git-cliff"
                     ;;
             esac
         fi

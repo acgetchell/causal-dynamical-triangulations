@@ -1,5 +1,4 @@
 name: CI
-# cspell:ignore rhysd binstall mktemp sha256sum sha256sums shasum
 permissions:
   contents: read
 concurrency:
@@ -25,7 +24,7 @@ env:
   ACTIONLINT_VERSION: "1.7.10"
   MARKDOWNLINT_VERSION: "0.47.0"
   SHFMT_VERSION: "3.12.0"
-  TYPOS_VERSION: "1.43.4"
+  TYPOS_VERSION: "1.43.5"
   UV_VERSION: "0.9.21"
 
 jobs:
@@ -47,7 +46,7 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2

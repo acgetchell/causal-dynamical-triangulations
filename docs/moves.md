@@ -8,10 +8,10 @@ Ergodic moves are the local Monte Carlo updates that allow the triangulation to 
 
 Enumerates the available move types:
 
-- `Move22` — (2,2) move: flip the shared edge between two triangles, preserving vertex count
+- `Move22` — (2,2) move: flip the shared edge between two triangles, preserving vertex count; causality-aware — the CDT layer validates and rejects moves that break causal layering
 - `Move13Add` — (1,3) move: insert a new vertex by subdividing one triangle into three
 - `Move31Remove` — (3,1) move: remove a vertex by merging three triangles into one
-- `EdgeFlip` — standard Delaunay edge flip maintaining the Delaunay property while potentially modifying causal structure
+- `EdgeFlip` — raw Delaunay edge flip maintaining the Delaunay property; no causal-layer enforcement (operates at the geometry level)
 
 ### `MoveResult`
 
@@ -24,7 +24,7 @@ Returned by each `attempt_*` method:
 
 ### `MoveStatistics`
 
-Tracks per-move-type attempt and acceptance counts. Fields follow the pattern `moves_NN_attempted` / `moves_NN_accepted` for (2,2), (1,3), and (3,1) moves, plus `edge_flips_attempted` / `edge_flips_accepted`.
+Tracks per-move-type attempt and acceptance counts. Fields: `moves_22_attempted` / `moves_22_accepted`, `moves_13_attempted` / `moves_13_accepted`, `moves_31_attempted` / `moves_31_accepted`, `edge_flips_attempted` / `edge_flips_accepted`.
 
 Key methods:
 
@@ -58,7 +58,7 @@ When the `delaunay` crate exposes `try_edge_flip` / `try_bistellar_flip`, the pl
 
 ## Planned Work
 
-- [ ] Implement `try_edge_flip()` in `delaunay` for (2,2) moves
+- [ ] Implement `try_edge_flip()` in `delaunay` for (2,2) moves (used by `EdgeFlip` / `attempt_edge_flip()`)
 - [ ] Implement `try_bistellar_flip()` in `delaunay` for (1,3)/(3,1) moves
 - [ ] Replace placeholder bodies with real geometric operations
 - [ ] Add causality and time-slice constraint validation

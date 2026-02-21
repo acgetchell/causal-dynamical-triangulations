@@ -775,8 +775,8 @@ class ChangelogUtils:
 
         return re.sub(r"https?://[^\s<>()]+", repl, line)
 
-    @classmethod
-    def _strip_heading_like_emphasis(cls, line: str) -> str:
+    @staticmethod
+    def _strip_heading_like_emphasis(line: str) -> str:
         """Strip full-line emphasis used as pseudo-headings.
 
         Markdownlint MD036 flags lines that are *only* emphasis (e.g. '*Title*')
@@ -820,8 +820,8 @@ class ChangelogUtils:
         processed = cls.wrap_bare_urls(processed)
         return cls._strip_heading_like_emphasis(processed)
 
-    @classmethod
-    def _convert_fenced_code_blocks_to_indented(cls, body_lines: list[str]) -> list[str]:
+    @staticmethod
+    def _convert_fenced_code_blocks_to_indented(body_lines: list[str]) -> list[str]:
         """Convert fenced code blocks (```...```) to indented code blocks.
 
         This repository's markdownlint config expects indented code blocks (MD046).
@@ -855,8 +855,8 @@ class ChangelogUtils:
 
         return out
 
-    @classmethod
-    def _indented_block_looks_like_code(cls, content_lines: list[str]) -> bool:
+    @staticmethod
+    def _indented_block_looks_like_code(content_lines: list[str]) -> bool:
         """Heuristically decide whether an indented block is actually code.
 
         Some commit bodies indent wrapped prose by 4 spaces, which Markdown would
@@ -966,8 +966,8 @@ class ChangelogUtils:
             body_content.pop()
         return body_content
 
-    @classmethod
-    def _format_indented_code_block_line(cls, line: str, max_line_length: int) -> list[str]:
+    @staticmethod
+    def _format_indented_code_block_line(line: str, max_line_length: int) -> list[str]:
         """Format an indented code block line, enforcing line-length limits.
 
         We avoid emitting whitespace-only lines (MD009) by collapsing them to a
@@ -1429,7 +1429,7 @@ This tool replaces both generate_changelog.sh and tag-from-changelog.sh.
 def _show_version() -> None:
     """Show version information."""
     print("changelog-utils v0.4.1 (Python implementation)")
-    print("Part of delaunay-scripts package")
+    print("Part of causal-dynamical-triangulations")
 
 
 def _execute_changelog_generation(debug_mode: bool) -> None:
@@ -2453,6 +2453,10 @@ class ChangelogProcessor:
                     self.expanded_commit_shas.add(commit_sha)
                     self.expanded_commit_shas.add(commit_sha[:7])
                     return None
+                # Empty expansion: mark SHA as seen to prevent duplicate processing.
+                self.expanded_commit_shas.add(commit_sha)
+                self.expanded_commit_shas.add(commit_sha[:7])
+                return original_line
 
         except Exception as e:
             logging.debug("Failed to process commit SHA %s: %s", commit_sha, e)

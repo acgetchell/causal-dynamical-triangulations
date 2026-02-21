@@ -11,7 +11,6 @@ extend-ignore-re = [
 [files]
 extend-exclude = [
     "*.lock",
-    "Cargo.lock",
     "*.min.js",
     "target/",
     "coverage/",
@@ -36,6 +35,10 @@ CDT = "CDT"
 MSRV = "MSRV"
 crate = "crate"
 rustc = "rustc"
+
+# Tool names and usernames
+rhysd = "rhysd"
+binstall = "binstall"
 
 # Common abbreviations
 CI = "CI"

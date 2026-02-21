@@ -2620,7 +2620,7 @@ def _find_downloaded_baseline_file(download_dir: Path) -> Path:
 
     if matches:
         msg = f"Multiple baseline_results.txt files found under: {download_dir}"
-        raise FileNotFoundError(msg)
+        raise RuntimeError(msg)
 
     msg = f"baseline_results.txt not found under: {download_dir}"
     raise FileNotFoundError(msg)
