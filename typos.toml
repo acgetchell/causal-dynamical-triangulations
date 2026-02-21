@@ -23,7 +23,7 @@ extend-exclude = [
 # Scientific/technical terms
 delaunay = "delaunay"
 triangulations = "triangulations"
-simplicies = "simplicies"
+simplices = "simplices"
 timelike = "timelike"
 spacelike = "spacelike"
 foliation = "foliation"

@@ -24,8 +24,8 @@ env:
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
   MARKDOWNLINT_VERSION: "0.47.0"
-  CSPELL_VERSION: "9.4.0"
   SHFMT_VERSION: "3.12.0"
+  TYPOS_VERSION: "1.43.4"
   UV_VERSION: "0.9.21"
 
 jobs:
@@ -68,7 +68,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
 
-      - name: Install Node.js (for markdownlint and cspell)
+      - name: Install Node.js (for markdownlint)
         if: matrix.os != 'windows-latest'
         uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
@@ -77,7 +77,19 @@ jobs:
       - name: Install Node.js packages
         if: matrix.os != 'windows-latest'
         run: |
-          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }} cspell@${{ env.CSPELL_VERSION }}
+          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }}
+
+      - name: Install typos-cli
+        if: matrix.os != 'windows-latest'
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: typos-cli@${{ env.TYPOS_VERSION }}
+
+      - name: Install dprint (for markdown/JSON/YAML formatting)
+        if: matrix.os != 'windows-latest'
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: dprint
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'
@@ -157,9 +169,9 @@ jobs:
       - name: Install additional tools (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          # Install shellcheck and jq
+          # Install shellcheck, jq, and yamllint
           sudo apt-get update
-          sudo apt-get install -y shellcheck jq
+          sudo apt-get install -y shellcheck jq yamllint
 
           # Install shfmt (pinned for CI consistency)
           SHFMT_ASSET="shfmt_v${SHFMT_VERSION}_linux_amd64"
@@ -190,8 +202,8 @@ jobs:
       - name: Install additional tools (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          # Install shellcheck and jq via Homebrew
-          brew install shellcheck jq
+          # Install shellcheck, jq, and yamllint via Homebrew
+          brew install shellcheck jq yamllint
 
           # Install shfmt (pinned for CI consistency with Linux)
           SHFMT_ARCH="amd64"

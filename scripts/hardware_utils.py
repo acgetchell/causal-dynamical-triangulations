@@ -352,7 +352,7 @@ class HardwareInfo:
                         break
         except subprocess.CalledProcessError as e:
             logger.debug("rustc command failed: %s", e)
-        except Exception as e:
+        except OSError as e:
             logger.debug("Failed to get Rust info: %s", e)
 
         return rust_version, rust_target

@@ -909,8 +909,12 @@ class ChangelogUtils:
                 return True
 
             # Single-token lines inside indented blocks are more likely to be code/output
-            # (hashes, identifiers, paths) than wrapped prose.
-            if " " not in stripped and len(stripped) >= 16:
+            # (hashes, identifiers, paths) than wrapped prose. Require the token to contain
+            # a digit, punctuation commonly found in paths/versions, look like a hex hash, or
+            # be unusually long (>= 40 chars — likely a hash, path, or other code output).
+            if " " not in stripped and (
+                any(c in stripped for c in "0123456789/.-_") or re.match(r"^[0-9a-fA-F]{16,}$", stripped) or len(stripped) >= 40
+            ):
                 return True
 
         return False
@@ -1181,7 +1185,7 @@ class ChangelogUtils:
             except GitRepoError:
                 # Fallback: keep a stable link even when running in a minimal test environment
                 # without a configured `origin` remote. Override via CHANGELOG_FALLBACK_URL.
-                repo_url = os.environ.get("CHANGELOG_FALLBACK_URL", "https://github.com/acgetchell/delaunay")
+                repo_url = os.environ.get("CHANGELOG_FALLBACK_URL", "https://github.com/acgetchell/causal-dynamical-triangulations")
 
             short_message = f"""Version {version}
 
@@ -1461,15 +1465,7 @@ def _execute_changelog_generation(debug_mode: bool) -> None:
         finally:
             os.chdir(original_cwd)
 
-    except (ChangelogError, GitRepoError, VersionError) as exc:
-        if file_paths is None:
-            raise SystemExit(1) from exc
-        _restore_backup_and_exit(file_paths)
-    except KeyboardInterrupt as exc:
-        if file_paths is None:
-            raise SystemExit(1) from exc
-        _restore_backup_and_exit(file_paths)
-    except Exception as exc:  # restore backup and exit on any unexpected error
+    except (ChangelogError, GitRepoError, VersionError, KeyboardInterrupt, Exception) as exc:
         if file_paths is None:
             raise SystemExit(1) from exc
         _restore_backup_and_exit(file_paths)
@@ -1531,7 +1527,7 @@ def _get_repository_url() -> str:
     try:
         return ChangelogUtils.get_repository_url()
     except GitRepoError:
-        default_fallback = "https://github.com/acgetchell/delaunay"
+        default_fallback = "https://github.com/acgetchell/causal-dynamical-triangulations"
         fallback = os.environ.get("CHANGELOG_FALLBACK_URL", default_fallback)
         print(
             f"Warning: Could not detect repository URL, using fallback: {fallback} (set CHANGELOG_FALLBACK_URL to override)",

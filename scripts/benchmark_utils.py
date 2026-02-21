@@ -2674,6 +2674,7 @@ class BaselineFetchOptions:
     workflow_ref: str = "main"
     wait_seconds: int = 3600
     poll_seconds: int = 30
+    gh_timeout_seconds: int = 60
 
 
 class GitHubBaselineFetcher:
@@ -2690,7 +2691,7 @@ class GitHubBaselineFetcher:
         # Legacy naming kept dots from the tag (e.g., v0.6.2).
         return f"performance-baseline-{_sanitize_tag_name(tag_name)}"
 
-    def _try_download_artifact(self, *, artifact_name: str, out_dir: Path) -> bool:
+    def _try_download_artifact(self, *, artifact_name: str, out_dir: Path, options: BaselineFetchOptions) -> bool:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         result = run_safe_command(
@@ -2708,6 +2709,7 @@ class GitHubBaselineFetcher:
             check=False,
             capture_output=True,
             text=True,
+            timeout=options.gh_timeout_seconds,
         )
 
         if result.returncode == 0:
@@ -2716,7 +2718,7 @@ class GitHubBaselineFetcher:
         logger.debug("gh run download failed (artifact=%s rc=%s stderr=%s)", artifact_name, result.returncode, (result.stderr or "").strip())
         return False
 
-    def _dispatch_generate_baseline(self, *, tag_name: str, workflow_ref: str) -> None:
+    def _dispatch_generate_baseline(self, *, tag_name: str, workflow_ref: str, options: BaselineFetchOptions) -> None:
         result = run_safe_command(
             "gh",
             [
@@ -2733,6 +2735,7 @@ class GitHubBaselineFetcher:
             check=False,
             capture_output=True,
             text=True,
+            timeout=options.gh_timeout_seconds,
         )
 
         if result.returncode != 0:
@@ -2756,7 +2759,7 @@ class GitHubBaselineFetcher:
         candidates = list(dict.fromkeys([artifact_name, legacy_artifact_name]))
 
         def _try_download_any() -> bool:
-            return any(self._try_download_artifact(artifact_name=candidate, out_dir=out_dir) for candidate in candidates)
+            return any(self._try_download_artifact(artifact_name=candidate, out_dir=out_dir, options=options) for candidate in candidates)
 
         try:
             if _try_download_any():
@@ -2768,7 +2771,7 @@ class GitHubBaselineFetcher:
                 raise FileNotFoundError(msg)
 
             print(f"🔁 Baseline artifact not found for {tag_name}; dispatching generate-baseline.yml and waiting...")
-            self._dispatch_generate_baseline(tag_name=tag_name, workflow_ref=options.workflow_ref)
+            self._dispatch_generate_baseline(tag_name=tag_name, workflow_ref=options.workflow_ref, options=options)
 
             deadline = time.monotonic() + options.wait_seconds
             attempt = 0

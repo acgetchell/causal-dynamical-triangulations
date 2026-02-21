@@ -1,6 +1,6 @@
 """
-Test package for delaunay Python utilities.
+Test package for causal-dynamical-triangulations Python utilities.
 
 This package contains comprehensive tests for the Python utility scripts
-used in the delaunay project, ensuring security, reliability, and correctness.
+used in the causal-dynamical-triangulations project, ensuring security, reliability, and correctness.
 """

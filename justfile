@@ -34,7 +34,7 @@ _ensure-npx:
 _ensure-dprint:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v dprint >/dev/null || { echo "❌ 'dprint' not found. See 'just setup-tools' or install: cargo install dprint"; exit 1; }
+    command -v dprint >/dev/null || { echo "❌ 'dprint' not found. See 'just setup' or install: cargo install dprint"; exit 1; }
 
 _ensure-shellcheck:
     #!/usr/bin/env bash
@@ -56,7 +56,7 @@ _ensure-taplo:
 _ensure-typos:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v typos >/dev/null || { echo "❌ 'typos' not found. See 'just setup-tools' or install: cargo install typos-cli"; exit 1; }
+    command -v typos >/dev/null || { echo "❌ 'typos' not found. See 'just setup' or install: cargo install typos-cli"; exit 1; }
 
 # Internal helper: ensure uv is installed
 _ensure-uv:
@@ -122,7 +122,7 @@ check-fast:
 
 # CI simulation: comprehensive validation (matches .github/workflows/ci.yml)
 # Runs: checks + all tests (Rust + Python) + examples + bench compile
-ci: check bench-compile test-all test-examples
+ci: check bench-compile test-all
     @echo "🎯 CI checks complete!"
 
 # CI with performance baseline
@@ -366,11 +366,11 @@ setup:
                         echo "    Or: cargo install taplo-cli"
                     fi
                     ;;
-                dprint|typos)
-                    echo "    Install: cargo install ${tool}-cli"
-                    if [ "$tool" = "typos" ]; then
-                        echo "    Or: cargo install typos-cli"
-                    fi
+                dprint)
+                    echo "    Install: cargo install dprint"
+                    ;;
+                typos)
+                    echo "    Install: cargo install typos-cli"
                     ;;
                 cargo-tarpaulin)
                     echo "    Install: cargo install cargo-tarpaulin"
