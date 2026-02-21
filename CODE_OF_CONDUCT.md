@@ -2,22 +2,18 @@
 
 ## Our Principles of Community
 
-The [causal-dynamical-triangulations][cdt-lib] quantum gravity research library community is founded on the [UC Davis Principles of Community][uc-davis-principles],
-adapted for our collaborative open-source scientific computing environment. We are committed to fostering an inclusive community that
-advances quantum gravity research and causal dynamical triangulation methods.
+The [causal-dynamical-triangulations][cdt-lib] quantum gravity research library community is founded on the [UC Davis Principles of Community][uc-davis-principles], adapted for our collaborative open-source scientific computing environment. We are committed to fostering an inclusive community that advances quantum gravity research and causal dynamical triangulation methods.
 
 ### We affirm the inherent dignity in all of us
 
-Every person has value and deserves to be treated with respect and courtesy, regardless of their background, experience level, or
-contributions to the project. We recognize that contributors come from diverse academic, professional, and personal backgrounds,
-bringing different perspectives that strengthen our community.
+Every person has value and deserves to be treated with respect and courtesy, regardless of their background, experience level, or contributions to the project. We recognize that contributors come from diverse academic, professional, and personal backgrounds, bringing different perspectives that strengthen our community.
 
 ### We strive for excellence in our teaching and learning, research and scholarship
 
 We are committed to:
 
 - **High-quality code**: Writing well-documented, tested, and maintainable implementations of causal dynamical triangulation algorithms
-- **Rigorous validation**: Ensuring our quantum gravity simulations are mathematically sound and computationally robust  
+- **Rigorous validation**: Ensuring our quantum gravity simulations are mathematically sound and computationally robust
 - **Knowledge sharing**: Providing clear documentation, examples, and educational resources about causal dynamical triangulations
 - **Continuous improvement**: Welcoming feedback, bug reports, and suggestions for enhancement
 - **Academic integrity**: Properly attributing research, algorithms, and code contributions
@@ -48,7 +44,7 @@ We encourage:
 
 - **Technical discussions** about algorithmic approaches, performance optimizations, and implementation details
 - **Questions** from newcomers to quantum gravity, causal dynamical triangulations, or Rust programming
-- **Constructive criticism** of code, documentation, and design decisions  
+- **Constructive criticism** of code, documentation, and design decisions
 - **Diverse perspectives** on problem-solving and research applications
 - **Respectful debate** about technical tradeoffs and design choices
 
@@ -77,7 +73,7 @@ Unacceptable behavior includes:
 
 - Harassment, intimidation, or discrimination based on any personal characteristics
 - Disrespectful or unprofessional language or behavior
-- Personal attacks or ad hominem arguments in technical discussions  
+- Personal attacks or ad hominem arguments in technical discussions
 - Deliberately excluding or discouraging participation based on background or experience
 - Publishing private information without consent
 - Academic misconduct, including plagiarism or misrepresentation of contributions
@@ -126,7 +122,7 @@ Please understand that:
 This Code of Conduct applies to all project spaces including:
 
 - GitHub repository (issues, pull requests, discussions, releases)
-- Code reviews and technical communications  
+- Code reviews and technical communications
 - Conference presentations about the library
 - Academic publications referencing this work
 - Email communications with maintainers
@@ -138,9 +134,7 @@ This Code of Conduct may be updated as the community grows and evolves. Changes 
 
 ## Acknowledgment
 
-These principles are adapted from the [UC Davis Principles of Community][uc-davis-principles], which were developed
-through a collaborative process involving the entire UC Davis community. We thank UC Davis for providing this thoughtful framework
-for inclusive community building.
+These principles are adapted from the [UC Davis Principles of Community][uc-davis-principles], which were developed through a collaborative process involving the entire UC Davis community. We thank UC Davis for providing this thoughtful framework for inclusive community building.
 
 ---
 

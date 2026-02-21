@@ -163,9 +163,7 @@ This command requires the [`actionlint`](https://github.com/rhysd/actionlint) bi
 
 ## Next Steps
 
-1. Run `just coverage` to regenerate `tarpaulin-report.json` (HTML output lives in `target/tarpaulin/`) and use `just coverage-report`
-   for a quick JSON summary whenever that file is available. If you only need the summary and the JSON already exists,
-   you can skip regenerating coverage.
+1. Run `just coverage` to regenerate `tarpaulin-report.json` (HTML output lives in `target/tarpaulin/`) and use `just coverage-report` for a quick JSON summary whenever that file is available. If you only need the summary and the JSON already exists, you can skip regenerating coverage.
 2. Prioritize testing unimplemented TriangulationMut operations
 3. Add integration tests for complete simulation workflows with moves
 4. Set up CI to track coverage trends over time

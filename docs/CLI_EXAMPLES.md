@@ -207,7 +207,7 @@ RUST_LOG=warn ./target/release/cdt --vertices 50 --timeslices 10 --simulate
 ### Memory Usage
 
 - Small (≤20 vertices): <10 MB
-- Medium (20-100 vertices): 10-100 MB  
+- Medium (20-100 vertices): 10-100 MB
 - Large (100+ vertices): 100+ MB
 
 ### Runtime

@@ -1,5 +1,4 @@
-Ah, that **completely changes the equation**! Since you own the delaunay crate, implementing bistellar flips there and importing them here with
-physics-based constraints is actually the **optimal architectural approach**. Here's why this is the best strategy:
+Ah, that **completely changes the equation**! Since you own the delaunay crate, implementing bistellar flips there and importing them here with physics-based constraints is actually the **optimal architectural approach**. Here's why this is the best strategy:
 
 ## Why This Approach is Ideal
 
@@ -64,7 +63,7 @@ impl ErgodicsSystem {
 **Phase 1 - delaunay crate:**
 
 1. Implement `try_edge_flip()` for (2,2) moves
-2. Implement `try_bistellar_flip()` for (1,3)/(3,1) moves  
+2. Implement `try_bistellar_flip()` for (1,3)/(3,1) moves
 3. Add comprehensive geometric validation
 4. Ensure robust error handling
 
@@ -77,11 +76,11 @@ impl ErgodicsSystem {
 
 ## Benefits of This Approach
 
-✅ **Optimal architecture** - geometry separated from physics  
-✅ **Reusable components** - other projects benefit from bistellar flips  
-✅ **Better testing** - geometric operations tested independently  
-✅ **Performance** - single, optimized implementation  
-✅ **Maintainability** - clear ownership boundaries  
-✅ **Future-proof** - enables other physics applications (Regge calculus, etc.)  
+✅ **Optimal architecture** - geometry separated from physics\
+✅ **Reusable components** - other projects benefit from bistellar flips\
+✅ **Better testing** - geometric operations tested independently\
+✅ **Performance** - single, optimized implementation\
+✅ **Maintainability** - clear ownership boundaries\
+✅ **Future-proof** - enables other physics applications (Regge calculus, etc.)
 
 This approach transforms the current quality issue (incomplete ergodic moves) into a well-architected, reusable solution that benefits both codebases.

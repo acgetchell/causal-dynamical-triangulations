@@ -6,28 +6,68 @@
 # Use bash with strict error handling for all recipes
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# Internal helper: ensure uv is installed
-_ensure-uv:
-    command -v uv >/dev/null || { echo "❌ 'uv' not found. See 'just setup' or https://github.com/astral-sh/uv"; exit 1; }
+_ensure-actionlint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v actionlint >/dev/null || { echo "❌ 'actionlint' not found. See 'just setup' or https://github.com/rhysd/actionlint"; exit 1; }
 
 # Internal helpers: ensure external tooling is installed
 _ensure-jq:
+    #!/usr/bin/env bash
+    set -euo pipefail
     command -v jq >/dev/null || { echo "❌ 'jq' not found. See 'just setup' or install: brew install jq"; exit 1; }
 
+_ensure-git-cliff:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v git-cliff >/dev/null || {
+        echo "❌ 'git-cliff' not found. Install via Homebrew: brew install git-cliff"
+        echo "   Or via Cargo: cargo install git-cliff"
+        exit 1
+    }
+
 _ensure-npx:
+    #!/usr/bin/env bash
+    set -euo pipefail
     command -v npx >/dev/null || { echo "❌ 'npx' not found. See 'just setup' or install Node.js (for npx tools): https://nodejs.org"; exit 1; }
 
-_ensure-taplo:
-    command -v taplo >/dev/null || { echo "❌ 'taplo' not found. See 'just setup' or install: brew install taplo (or: cargo install taplo-cli)"; exit 1; }
+_ensure-dprint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v dprint >/dev/null || { echo "❌ 'dprint' not found. See 'just setup-tools' or install: cargo install dprint"; exit 1; }
 
 _ensure-shellcheck:
+    #!/usr/bin/env bash
+    set -euo pipefail
     command -v shellcheck >/dev/null || { echo "❌ 'shellcheck' not found. See 'just setup' or https://www.shellcheck.net"; exit 1; }
 
 _ensure-shfmt:
-    command -v shfmt >/dev/null || { echo "❌ 'shfmt' not found. See 'just setup' or https://github.com/mvdan/sh"; exit 1; }
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v shfmt >/dev/null || { echo "❌ 'shfmt' not found. See 'just setup' or install: brew install shfmt"; exit 1; }
 
-_ensure-actionlint:
-    command -v actionlint >/dev/null || { echo "❌ 'actionlint' not found. See 'just setup' or https://github.com/rhysd/actionlint"; exit 1; }
+# Internal helper: ensure taplo is installed
+_ensure-taplo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v taplo >/dev/null || { echo "❌ 'taplo' not found. See 'just setup' or install: brew install taplo (or: cargo install taplo-cli)"; exit 1; }
+
+# Internal helper: ensure typos-cli is installed
+_ensure-typos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v typos >/dev/null || { echo "❌ 'typos' not found. See 'just setup-tools' or install: cargo install typos-cli"; exit 1; }
+
+# Internal helper: ensure uv is installed
+_ensure-uv:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v uv >/dev/null || { echo "❌ 'uv' not found. See 'just setup' or https://github.com/astral-sh/uv"; exit 1; }
+
+_ensure-yamllint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v yamllint >/dev/null || { echo "❌ 'yamllint' not found. See 'just setup' or install: brew install yamllint"; exit 1; }
 
 # GitHub Actions workflow validation
 action-lint: _ensure-actionlint
@@ -47,6 +87,9 @@ action-lint: _ensure-actionlint
 bench:
     cargo bench --workspace
 
+# Compile benchmarks without running them, treating warnings as errors.
+# This catches bench/release-profile-only warnings (e.g. debug_assertions-gated unused vars)
+# that won't show up in normal debug-profile `cargo test` / `cargo clippy` runs.
 bench-compile:
     RUSTFLAGS='-D warnings' cargo bench --workspace --no-run
 
@@ -54,8 +97,11 @@ bench-compile:
 build:
     cargo build
 
+build-release:
+    cargo build --release
+
 # Changelog management
-changelog: _ensure-uv
+changelog: _ensure-uv _ensure-git-cliff
     uv run changelog-utils generate
 
 changelog-tag version: _ensure-uv
@@ -66,16 +112,17 @@ changelog-update: changelog
     @echo "To create a git tag with changelog content for a specific version, run:"
     @echo "  just changelog-tag <version>  # e.g., just changelog-tag v0.4.2"
 
-# Fix (mutating): apply formatters/auto-fixes
-fix: toml-fmt fmt python-fix shell-fmt markdown-fix
-    @echo "✅ Fixes applied!"
-
 # Check (non-mutating): run all linters/validators
 check: lint
     @echo "✅ Checks complete!"
 
-# CI simulation: comprehensive checks + tests (matches .github/workflows/ci.yml)
-ci: check test test-integration bench-compile
+# Fast compile check (no binary produced)
+check-fast:
+    cargo check
+
+# CI simulation: comprehensive validation (matches .github/workflows/ci.yml)
+# Runs: checks + all tests (Rust + Python) + examples + bench compile
+ci: check bench-compile test-all test-examples
     @echo "🎯 CI checks complete!"
 
 # CI with performance baseline
@@ -88,6 +135,7 @@ clean:
     cargo clean
     rm -rf target/tarpaulin
     rm -rf coverage_report
+    rm -rf coverage
 
 # Code quality and formatting
 clippy:
@@ -97,10 +145,14 @@ clippy:
 commit-check: check test-all test-release bench-compile kani-fast
     @echo "🚀 Ready to commit! All checks passed."
 
-# Coverage analysis
+# Coverage analysis for local development (HTML output)
 coverage:
     cargo tarpaulin --exclude-files 'benches/**' --exclude-files 'examples/**' --exclude-files 'tests/**' --out Html --output-dir target/tarpaulin
     @echo "📊 Coverage report generated: target/tarpaulin/tarpaulin-report.html"
+
+# Coverage analysis for CI (XML output for codecov/codacy)
+coverage-ci:
+    cargo tarpaulin --exclude-files 'benches/**' --exclude-files 'examples/**' --exclude-files 'tests/**' --out Xml --output-dir coverage
 
 coverage-report *args: _ensure-uv
     uv run coverage_report {{args}}
@@ -109,12 +161,16 @@ coverage-report *args: _ensure-uv
 default:
     @just --list
 
-# Development workflow: quick format + core Rust checks + tests
-dev: fix clippy test
-    @echo "⚡ Quick development check complete!"
-
 doc-check:
     RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --document-private-items
+
+# Examples and validation
+examples:
+    ./scripts/run_all_examples.sh
+
+# Fix (mutating): apply formatters/auto-fixes
+fix: toml-fmt fmt python-fix shell-fmt markdown-fix
+    @echo "✅ Fixes applied!"
 
 fmt:
     cargo fmt --all
@@ -122,48 +178,57 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
+# Help workflows
 help-workflows:
     @echo "Common Just workflows:"
-    @echo "  just fix           # Apply formatters/auto-fixes (mutating)"
-    @echo "  just check         # Run linters/validators (non-mutating)"
-    @echo "  just dev           # Quick development cycle (fix + clippy + tests)"
-    @echo "  just ci            # CI parity (mirrors .github/workflows/ci.yml)"
-    @echo "  just commit-check  # Comprehensive pre-commit validation (recommended before pushing)"
-    @echo "  just ci-baseline   # CI + save performance baseline"
+    @echo "  just fix               # Apply formatters/auto-fixes (mutating)"
+    @echo "  just check             # Run lint/validators (non-mutating)"
+    @echo "  just check-fast        # Fast compile check (cargo check)"
+    @echo "  just ci                # Full CI run (checks + all tests + examples + bench compile)"
+    @echo "  just ci-baseline       # CI + save performance baseline"
+    @echo "  just commit-check      # Comprehensive pre-commit validation"
     @echo ""
     @echo "Testing:"
-    @echo "  just test              # Fast tests (lib + doc)"
-    @echo "  just test-ci           # CI tests (lib + integration + examples)"
+    @echo "  just test              # Lib and doc tests only (fast, used by CI)"
     @echo "  just test-integration  # Integration tests (tests/)"
-    @echo "  just test-doc          # Doc tests"
-    @echo "  just test-cli          # CLI integration tests only"
-    @echo "  just test-python       # Python tests (pytest)"
-    @echo "  just test-all          # All tests (CI + doc + Python)"
+    @echo "  just test-all          # All tests (lib + doc + integration + Python)"
+    @echo "  just test-python       # Python tests only (pytest)"
     @echo "  just test-release      # All tests in release mode"
-    @echo "  just coverage          # Generate coverage report"
+    @echo "  just test-cli          # CLI integration tests only"
+    @echo "  just test-examples     # Run all examples"
+    @echo "  just examples          # Run all example scripts"
+    @echo "  just coverage          # Generate coverage report (HTML)"
+    @echo "  just coverage-ci       # Generate coverage for CI (XML)"
     @echo ""
     @echo "Quality Check Groups:"
-    @echo "  just lint          # All linting (non-mutating checks: code + docs + config)"
-    @echo "  just lint-code     # Code checks (Rust, Python, Shell)"
-    @echo "  just lint-docs     # Documentation checks (Markdown, Spelling)"
-    @echo "  just lint-config   # Configuration checks (JSON, TOML, Actions)"
+    @echo "  just lint          # All linting (code + docs + config)"
+    @echo "  just lint-code     # Code linting (Rust, Python, Shell)"
+    @echo "  just lint-docs     # Documentation linting (Markdown, Spelling)"
+    @echo "  just lint-config   # Configuration validation (JSON, TOML, Actions)"
     @echo ""
     @echo "Formal Verification:"
     @echo "  just kani          # Run all Kani formal verification proofs"
     @echo "  just kani-fast     # Run fast Kani verification (ActionConfig only)"
+    @echo ""
+    @echo "Benchmark System:"
+    @echo "  just bench              # Run all benchmarks"
+    @echo "  just bench-compile      # Compile benchmarks without running"
     @echo ""
     @echo "Performance Analysis:"
     @echo "  just perf-help     # Show performance analysis commands"
     @echo "  just perf-check    # Check for performance regressions"
     @echo "  just perf-baseline # Save current performance as baseline"
     @echo ""
+    @echo "Changelog:"
+    @echo "  just changelog            # Generate/update CHANGELOG.md"
+    @echo "  just changelog-tag <ver>  # Create git tag with changelog content"
+    @echo ""
     @echo "Running:"
     @echo "  just run -- <args>  # Run with custom arguments"
     @echo "  just run-example    # Run with example arguments"
     @echo "  just run-simulation # Run basic_simulation.sh example script"
     @echo ""
-    @echo "Note: 'just commit-check' includes Kani verification. Run 'just setup' for full environment."
-    @echo "Note: Some recipes require external tools. See 'just setup' output."
+    @echo "Note: Some recipes require external tools. Run 'just setup-tools' (tooling) or 'just setup' (full env) first."
 
 # Kani formal verification
 kani:
@@ -172,45 +237,26 @@ kani:
 kani-fast:
     cargo kani --harness verify_action_config
 
-# Code linting: Rust (fmt-check, clippy, docs) + Python + Shell scripts
-lint-code: fmt-check clippy doc-check python-check shell-check
+# All linting: code + documentation + configuration
+lint: lint-code lint-docs lint-config
+
+# Code linting: Rust (fmt-check, clippy, docs) + Python (ruff, ty, mypy) + Shell scripts
+lint-code: fmt-check clippy doc-check python-lint shell-lint
+
+# Configuration validation: JSON, TOML, YAML, GitHub Actions workflows
+lint-config: validate-json toml-lint toml-fmt-check yaml-lint action-lint
 
 # Documentation linting: Markdown + spell checking
 lint-docs: markdown-check spell-check
 
-# Configuration validation: JSON, TOML, GitHub Actions workflows
-lint-config: validate-json toml-lint toml-fmt-check action-lint
+markdown-check: _ensure-dprint
+    dprint check
 
-# All linting: code + documentation + configuration
-lint: lint-code lint-docs lint-config
+# Markdown and YAML: apply auto-fixes (mutating)
+markdown-fix: _ensure-dprint
+    dprint fmt
 
-# Markdown: apply auto-fixes (mutating)
-markdown-fix: _ensure-npx
-    #!/usr/bin/env bash
-    set -euo pipefail
-    files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(git ls-files -z '*.md')
-    if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 -n100 npx markdownlint --config .markdownlint.json --fix
-    else
-        echo "No markdown files found to format."
-    fi
-
-# Markdown: lint/check (non-mutating)
-markdown-check: _ensure-npx
-    #!/usr/bin/env bash
-    set -euo pipefail
-    files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(git ls-files -z '*.md')
-    if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 -n100 npx markdownlint --config .markdownlint.json
-    else
-        echo "No markdown files found to check."
-    fi
+markdown-lint: markdown-check
 
 perf-baseline tag="": _ensure-uv
     #!/usr/bin/env bash
@@ -257,21 +303,21 @@ perf-report file="": _ensure-uv
 perf-trends days="7": _ensure-uv
     uv run performance-analysis --trends {{days}}
 
+python-check: _ensure-uv
+    uv run ruff format --check scripts/
+    uv run ruff check scripts/
+    just python-typecheck
+
 # Python code quality
 python-fix: _ensure-uv
     uv run ruff check scripts/ --fix
     uv run ruff format scripts/
 
-python-typecheck:
-    @echo "🔍 ty (primary)"
-    uv run ty check scripts/
-    @echo "🔍 mypy (compatibility)"
-    uv run mypy scripts/*.py
+python-lint: python-check
 
-python-check: _ensure-uv
-    uv run ruff format --check scripts/
-    uv run ruff check scripts/
-    just python-typecheck
+python-typecheck: _ensure-uv
+    uv run ty check scripts/
+    cd scripts && uv run mypy . --exclude tests
 
 # Running the binary
 run *args:
@@ -300,7 +346,7 @@ setup:
     rustup component add clippy rustfmt rust-docs rust-src
     echo ""
     echo "Additional tools (will check if installed):"
-    for tool in uv actionlint shfmt shellcheck jq node npx taplo cargo-tarpaulin; do
+    for tool in uv actionlint shfmt shellcheck jq taplo yamllint dprint typos cargo-tarpaulin; do
         if command -v "$tool" &> /dev/null; then
             echo "  ✓ $tool installed"
         else
@@ -311,8 +357,8 @@ setup:
                     echo "    macOS: brew install uv"
                     echo "    Linux/WSL: curl -LsSf https://astral.sh/uv/install.sh | sh"
                     ;;
-                actionlint)
-                    echo "    Install: https://github.com/rhysd/actionlint"
+                actionlint|yamllint)
+                    echo "    macOS: brew install $tool"
                     ;;
                 shfmt|shellcheck|jq|taplo)
                     echo "    macOS: brew install $tool"
@@ -320,8 +366,11 @@ setup:
                         echo "    Or: cargo install taplo-cli"
                     fi
                     ;;
-                node|npx)
-                    echo "    Install Node.js (for npx/cspell): https://nodejs.org"
+                dprint|typos)
+                    echo "    Install: cargo install ${tool}-cli"
+                    if [ "$tool" = "typos" ]; then
+                        echo "    Or: cargo install typos-cli"
+                    fi
                     ;;
                 cargo-tarpaulin)
                     echo "    Install: cargo install cargo-tarpaulin"
@@ -352,20 +401,6 @@ setup:
     cargo build
     echo "✅ Setup complete! Run 'just help-workflows' to see available commands."
 
-# Shell scripts: format (mutating)
-shell-fmt: _ensure-shfmt
-    #!/usr/bin/env bash
-    set -euo pipefail
-    files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(git ls-files -z '*.sh')
-    if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 -n1 shfmt -w
-    else
-        echo "No shell files found to format."
-    fi
-
 # Shell scripts: lint/check (non-mutating)
 shell-check: _ensure-shellcheck _ensure-shfmt
     #!/usr/bin/env bash
@@ -381,26 +416,58 @@ shell-check: _ensure-shellcheck _ensure-shfmt
         echo "No shell files found to check."
     fi
 
-# Spell checking with robust bash implementation
-spell-check: _ensure-npx
+# Shell scripts: format (mutating)
+shell-fmt: _ensure-shfmt
     #!/usr/bin/env bash
     set -euo pipefail
     files=()
-    # Use -z for NUL-delimited output to handle filenames with spaces
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.sh')
+    if [ "${#files[@]}" -gt 0 ]; then
+        echo "🧹 shfmt -w (${#files[@]} files)"
+        printf '%s\0' "${files[@]}" | xargs -0 shfmt -w
+    else
+        echo "No shell files found to format."
+    fi
+    # Note: justfiles are not shell scripts and are excluded from shellcheck
+
+shell-lint: shell-check
+
+# Spell check (typos)
+spell-check: _ensure-typos
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    # Use -z for NUL-delimited output to handle filenames with spaces.
+    #
+    # Note: For renames/copies, `git status --porcelain -z` emits *two* NUL-separated paths.
+    # The ordering can differ depending on the porcelain output, so we read both and
+    # spell-check whichever one exists on disk.
     while IFS= read -r -d '' status_line; do
-        # Extract filename from git status --porcelain -z format
-        # Format: XY filename or XY oldname -> newname (for renames)
-        if [[ "$status_line" =~ ^..[[:space:]](.*)$ ]]; then
-            filename="${BASH_REMATCH[1]}"
-            # For renames (format: "old -> new"), take the new filename
-            if [[ "$filename" == *" -> "* ]]; then
-                filename="${filename#* -> }"
+        status="${status_line:0:2}"
+        filename="${status_line:3}"
+
+        # For renames/copies, consume the second path token to keep parsing in sync.
+        # Prefer the path that exists on disk to avoid passing stale paths to typos.
+        if [[ "$status" == *"R"* || "$status" == *"C"* ]]; then
+            if IFS= read -r -d '' other_path; then
+                if [ ! -e "$filename" ] && [ -e "$other_path" ]; then
+                    filename="$other_path"
+                fi
             fi
-            files+=("$filename")
         fi
+
+        # Skip deletions (file may no longer exist).
+        if [[ "$status" == *"D"* ]]; then
+            continue
+        fi
+
+        files+=("$filename")
     done < <(git status --porcelain -z --ignored=no)
     if [ "${#files[@]}" -gt 0 ]; then
-        printf '%s\0' "${files[@]}" | xargs -0 npx cspell lint --config cspell.json --no-progress --gitignore --cache --exclude cspell.json
+        # Exclude typos.toml itself: it intentionally contains allowlisted fragments.
+        printf '%s\0' "${files[@]}" | xargs -0 -n100 typos --force-exclude --exclude typos.toml --
     else
         echo "No modified files to spell-check."
     fi
@@ -490,5 +557,19 @@ toml-lint: _ensure-taplo
         taplo lint "${files[@]}"
     else
         echo "No TOML files found to lint."
+    fi
+
+yaml-lint: _ensure-yamllint
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git ls-files -z '*.yml' '*.yaml')
+    if [ "${#files[@]}" -gt 0 ]; then
+        echo "🔍 yamllint (${#files[@]} files)"
+        yamllint --strict -c .yamllint "${files[@]}"
+    else
+        echo "No YAML files found to lint."
     fi
 

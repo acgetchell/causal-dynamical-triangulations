@@ -1,17 +1,12 @@
 # causal-dynamical-triangulations
 
-[![CI](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/ci.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/ci.yml)
-[![rust-clippy analyze](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/rust-clippy.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/rust-clippy.yml)
-[![Codecov](https://codecov.io/gh/acgetchell/causal-dynamical-triangulations/graph/badge.svg?token=CsbOJBypGC)](https://codecov.io/gh/acgetchell/causal-dynamical-triangulations)
-[![Kani CI](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/kani.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/kani.yml)
-[![Audit dependencies](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/audit.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/audit.yml)
+[![CI](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/ci.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/ci.yml) [![rust-clippy analyze](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/rust-clippy.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/rust-clippy.yml) [![Codecov](https://codecov.io/gh/acgetchell/causal-dynamical-triangulations/graph/badge.svg?token=CsbOJBypGC)](https://codecov.io/gh/acgetchell/causal-dynamical-triangulations) [![Kani CI](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/kani.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/kani.yml) [![Audit dependencies](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/audit.yml/badge.svg)](https://github.com/acgetchell/causal-dynamical-triangulations/actions/workflows/audit.yml)
 
 Causal Dynamical Triangulations for quantum gravity in [Rust], built on fast Delaunay triangulation primitives.
 
 ## 🌌 Introduction
 
-This library implements **Causal Dynamical Triangulations (CDT)** in [Rust]. CDT is a non-perturbative approach to quantum gravity that constructs
-discrete spacetime as triangulated manifolds with causal structure, providing a computational framework for studying quantum gravity phenomenology.
+This library implements **Causal Dynamical Triangulations (CDT)** in [Rust]. CDT is a non-perturbative approach to quantum gravity that constructs discrete spacetime as triangulated manifolds with causal structure, providing a computational framework for studying quantum gravity phenomenology.
 
 For an introduction to Causal Dynamical Triangulations, see [this paper](https://arxiv.org/abs/hep-th/0105267).
 
@@ -37,7 +32,7 @@ Early development - API and data structures may change. The library currently su
 **Why Rust for CDT?**
 
 - **Memory safety** for large-scale simulations
-- **Zero-cost abstractions** for performance-critical geometry operations  
+- **Zero-cost abstractions** for performance-critical geometry operations
 - **Formal verification** support via [Kani] for mathematical correctness
 - **Rich ecosystem** for scientific computing and parallel processing
 
@@ -66,9 +61,7 @@ just run-example     # Basic simulation
 ./examples/scripts/performance_test.sh      # Performance benchmarking across system sizes
 ```
 
-`just setup` prints a checklist of external tools used by repository workflows
-(for example: `uv`, Node.js/`npx`, `taplo`, `actionlint`, `shfmt`, `shellcheck`, `jq`) and
-how to install them.
+`just setup` prints a checklist of external tools used by repository workflows (for example: `uv`, Node.js/`npx`, `taplo`, `actionlint`, `shfmt`, `shellcheck`, `jq`) and how to install them.
 
 **Just Workflows:**
 
@@ -135,7 +128,7 @@ cargo build --release
 The `examples/scripts/` directory contains research workflows:
 
 - **`basic_simulation.sh`** - Simple test run and validation
-- **`parameter_sweep.sh`** - Temperature sweep for phase transition analysis  
+- **`parameter_sweep.sh`** - Temperature sweep for phase transition analysis
 - **`performance_test.sh`** - Performance benchmarking across system sizes
 
 For detailed documentation, sample output, and usage instructions for each script, see [examples/scripts/README.md](examples/scripts/README.md).
@@ -162,9 +155,7 @@ just perf-report         # Generate detailed performance report
 just perf-trends 7       # Analyze performance trends over 7 days
 ```
 
-See [`benches/README.md`](benches/README.md) for benchmark details and
-[`docs/PERFORMANCE_TESTING.md`](docs/PERFORMANCE_TESTING.md) for comprehensive
-performance testing workflow documentation.
+See [`benches/README.md`](benches/README.md) for benchmark details and [`docs/PERFORMANCE_TESTING.md`](docs/PERFORMANCE_TESTING.md) for comprehensive performance testing workflow documentation.
 
 ## 🔒 Formal Verification
 
@@ -182,8 +173,7 @@ cargo kani --harness verify_action_config
 cargo kani --harness verify_regge_action_properties
 ```
 
-**Toolchain note:** Kani ships its own pinned nightly and does not read `rust-toolchain.toml`. We install `kani-verifier`
-0.66.0 (bundled rustc 1.93.0-nightly) for reproducibility; regular builds/tests continue to use the workspace MSRV (1.92.0).
+**Toolchain note:** Kani ships its own pinned nightly and does not read `rust-toolchain.toml`. We install `kani-verifier` 0.66.0 (bundled rustc 1.93.0-nightly) for reproducibility; regular builds/tests continue to use the workspace MSRV (1.92.0).
 
 ### Workflow behavior
 
@@ -212,8 +202,7 @@ cargo kani --harness verify_regge_action_properties
 - **Foliation‑aware data model**: explicit time labels; space‑like vs time‑like edges encoded in types.
 - **Testing**: unit + property tests; Kani proofs for invariants (e.g., move reversibility, manifoldness).
 
-For comprehensive guidelines on contributing, development environment setup,
-testing, and project structure, please see [CONTRIBUTING.md](CONTRIBUTING.md).
+For comprehensive guidelines on contributing, development environment setup, testing, and project structure, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 This includes information about:
 
@@ -225,8 +214,7 @@ This includes information about:
 
 ## 📚 References
 
-For a comprehensive list of academic references and bibliographic citations
-used throughout the library, see [REFERENCES.md](REFERENCES.md).
+For a comprehensive list of academic references and bibliographic citations used throughout the library, see [REFERENCES.md](REFERENCES.md).
 
 This includes foundational work on:
 

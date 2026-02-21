@@ -8,7 +8,7 @@
 use crate::errors::CdtError;
 use crate::util::generate_random_float;
 use num_traits::cast::NumCast;
-use rand::Rng;
+use rand::RngExt;
 
 /// Types of ergodic moves available in 2D CDT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

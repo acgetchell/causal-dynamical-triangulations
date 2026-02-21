@@ -1,0 +1,18 @@
+---
+extends: default
+
+ignore: |
+  target*/
+  target-*/
+  **/target*/
+
+rules:
+  line-length:
+    max: 140
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+  # Prettier uses a single space before inline comments ("foo: bar # comment").
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  document-start: disable
