@@ -2626,7 +2626,12 @@ def _find_downloaded_baseline_file(download_dir: Path) -> Path:
     raise FileNotFoundError(msg)
 
 
-def render_baseline_comparison(project_root: Path, old_baseline: Path, new_baseline: Path) -> tuple[str, bool]:
+def render_baseline_comparison(
+    project_root: Path,
+    old_baseline: Path,
+    new_baseline: Path,
+    threshold: float = DEFAULT_REGRESSION_THRESHOLD,
+) -> tuple[str, bool]:
     """Render a baseline-vs-baseline comparison report.
 
     Returns:
@@ -2644,6 +2649,7 @@ def render_baseline_comparison(project_root: Path, old_baseline: Path, new_basel
     hardware_report, _ = HardwareComparator.compare_hardware(new_hw, old_hw)
 
     comparator = PerformanceComparator(project_root)
+    comparator.regression_threshold = threshold
     old_results = comparator.parse_baseline_file(old_content)
     new_results = comparator.parse_baseline_file(new_content)
 
@@ -2837,6 +2843,12 @@ def _add_local_baseline_subcommands(subparsers: "argparse._SubParsersAction[argp
     bb_parser.add_argument("--new", dest="new_baseline", type=Path, required=True, help="Path to the newer baseline file")
     bb_parser.add_argument("--output", type=Path, help="Optional path to write the comparison report")
     bb_parser.add_argument("--project-root", type=Path, help="Project root (only used for repo context; optional)")
+    bb_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_REGRESSION_THRESHOLD,
+        help=f"Regression threshold percentage (default: {DEFAULT_REGRESSION_THRESHOLD})",
+    )
 
     fetch_parser = subparsers.add_parser("fetch-baseline", help="Fetch a tag baseline artifact from GitHub Actions")
     fetch_parser.add_argument("--tag", dest="tag_name", type=str, required=True, help="Tag name to fetch (e.g., v0.6.2)")
@@ -2852,6 +2864,13 @@ def _add_local_baseline_subcommands(subparsers: "argparse._SubParsersAction[argp
     )
     fetch_parser.add_argument("--wait-seconds", type=int, default=3600, help="Max seconds to wait when regenerating (default: 3600)")
     fetch_parser.add_argument("--poll-seconds", type=int, default=30, help="Polling interval seconds when waiting (default: 30)")
+    fetch_parser.add_argument(
+        "--gh-timeout",
+        dest="gh_timeout_seconds",
+        type=int,
+        default=60,
+        help="Timeout in seconds for each gh CLI call (default: 60)",
+    )
     fetch_parser.add_argument("--project-root", type=Path, help="Project root containing the git repo (directory containing Cargo.toml)")
 
     tags_parser = subparsers.add_parser("compare-tags", help="Compare two tags by fetching their baselines and comparing locally")
@@ -2869,6 +2888,19 @@ def _add_local_baseline_subcommands(subparsers: "argparse._SubParsersAction[argp
     )
     tags_parser.add_argument("--wait-seconds", type=int, default=3600, help="Max seconds to wait when regenerating (default: 3600)")
     tags_parser.add_argument("--poll-seconds", type=int, default=30, help="Polling interval seconds when waiting (default: 30)")
+    tags_parser.add_argument(
+        "--gh-timeout",
+        dest="gh_timeout_seconds",
+        type=int,
+        default=60,
+        help="Timeout in seconds for each gh CLI call (default: 60)",
+    )
+    tags_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_REGRESSION_THRESHOLD,
+        help=f"Regression threshold percentage (default: {DEFAULT_REGRESSION_THRESHOLD})",
+    )
     tags_parser.add_argument("--project-root", type=Path, help="Project root containing the git repo (directory containing Cargo.toml)")
 
 
@@ -2982,6 +3014,7 @@ def _baseline_fetch_options_from_args(args: argparse.Namespace) -> BaselineFetch
         workflow_ref=args.workflow_ref,
         wait_seconds=args.wait_seconds,
         poll_seconds=args.poll_seconds,
+        gh_timeout_seconds=args.gh_timeout_seconds,
     )
 
 
@@ -2994,7 +3027,7 @@ def _cmd_compare_baselines(args: argparse.Namespace, project_root: Path) -> None
         sys.exit(3)
 
     try:
-        report_text, regression_found = render_baseline_comparison(project_root, args.old_baseline, args.new_baseline)
+        report_text, regression_found = render_baseline_comparison(project_root, args.old_baseline, args.new_baseline, args.threshold)
     except FileNotFoundError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(3)
@@ -3022,6 +3055,15 @@ def _cmd_fetch_baseline(args: argparse.Namespace, project_root: Path) -> None:
     except TimeoutError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
+    except ExecutableNotFoundError as e:
+        print(f"❌ Missing dependency: {e}", file=sys.stderr)
+        sys.exit(2)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git command failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
     except RuntimeError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(2 if str(e).startswith("Missing dependency:") else 1)
@@ -3041,11 +3083,20 @@ def _cmd_compare_tags(args: argparse.Namespace, project_root: Path) -> None:
         old_baseline = fetcher.fetch_baseline(tag_name=args.old_tag, out_dir=old_dir, options=options)
         new_baseline = fetcher.fetch_baseline(tag_name=args.new_tag, out_dir=new_dir, options=options)
 
-        report_text, regression_found = render_baseline_comparison(project_root, old_baseline, new_baseline)
+        report_text, regression_found = render_baseline_comparison(project_root, old_baseline, new_baseline, args.threshold)
     except FileNotFoundError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(3)
     except TimeoutError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
+    except ExecutableNotFoundError as e:
+        print(f"❌ Missing dependency: {e}", file=sys.stderr)
+        sys.exit(2)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git command failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
     except RuntimeError as e:

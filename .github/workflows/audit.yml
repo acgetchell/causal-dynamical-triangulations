@@ -42,13 +42,15 @@ jobs:
           restore-keys: advisory-db-
 
       - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
+        with:
+          tool: cargo-audit@0.22.1
 
       - name: Run cargo audit
         run: |
           cargo audit --json > audit-results.json || true
-          # Show human-readable output as well
-          cargo audit
+          # Show human-readable output as well (reuses cached advisory DB)
+          cargo audit --no-fetch
         continue-on-error: true
 
       - name: Upload audit results

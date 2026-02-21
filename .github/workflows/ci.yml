@@ -23,6 +23,7 @@ env:
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
   MARKDOWNLINT_VERSION: "0.47.0"
+  DPRINT_VERSION: "0.51.1"
   SHFMT_VERSION: "3.12.0"
   TYPOS_VERSION: "1.43.5"
   UV_VERSION: "0.9.21"
@@ -88,7 +89,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2.65.1
         with:
-          tool: dprint
+          tool: dprint@${{ env.DPRINT_VERSION }}
 
       - name: Install taplo (for TOML formatting and linting)
         if: matrix.os != 'windows-latest'

@@ -67,7 +67,7 @@ _ensure-uv:
 _ensure-yamllint:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v yamllint >/dev/null || { echo "❌ 'yamllint' not found. See 'just setup' or install: brew install yamllint"; exit 1; }
+    command -v yamllint >/dev/null || { echo "❌ 'yamllint' not found. See 'just setup' or install: brew install yamllint (macOS), pip install yamllint, or uv tool install yamllint"; exit 1; }
 
 # GitHub Actions workflow validation
 action-lint: _ensure-actionlint
@@ -445,8 +445,9 @@ spell-check: _ensure-typos
     # Use -z for NUL-delimited output to handle filenames with spaces.
     #
     # Note: For renames/copies, `git status --porcelain -z` emits *two* NUL-separated paths.
-    # The ordering can differ depending on the porcelain output, so we read both and
-    # spell-check whichever one exists on disk.
+    # The field order is deterministic: the first path (filename) is the destination/new path
+    # and the second path (other_path) is the source/old path. We prefer whichever exists on
+    # disk (typically the destination) to avoid passing stale paths to typos.
     while IFS= read -r -d '' status_line; do
         status="${status_line:0:2}"
         filename="${status_line:3}"
