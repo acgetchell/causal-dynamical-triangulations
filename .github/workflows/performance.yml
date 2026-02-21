@@ -53,6 +53,17 @@ jobs:
         with:
           fetch-depth: 2 # Need base commit for comparison
 
+      - name: Detect benchmarks
+        id: detect_bench
+        run: |
+          if grep -q '\[\[bench\]\]' Cargo.toml && ls benches/*.rs > /dev/null 2>&1; then
+            echo "bench_found=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Benchmarks found"
+          else
+            echo "bench_found=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️  No benchmarks found"
+          fi
+
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
         with:
@@ -77,13 +88,6 @@ jobs:
           if [[ ! -f "rust-toolchain.toml" ]]; then
             echo "❌ rust-toolchain.toml not found"
             exit 1
-          fi
-
-          # Check for benchmark configuration in Cargo.toml and bench files
-          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
-            echo "⚠️  Warning: No benchmark configuration found"
-          else
-            echo "✅ Found benchmark configuration in Cargo.toml and benches/"
           fi
 
           # Verify performance analysis script is available
@@ -114,16 +118,9 @@ jobs:
 
       # For main branch: save baseline after successful benchmarks
       - name: Run benchmarks and save baseline (main branch)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.detect_bench.outputs.bench_found == 'true'
         run: |
           echo "🔄 Running benchmarks on main branch and saving baseline..."
-
-          # Check if benchmarks exist before running
-          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
-            echo "⚠️  No benchmarks found to run"
-            echo "Skipping baseline creation"
-            exit 0
-          fi
 
           # Run performance analysis with error handling
           if ! uv run performance-analysis --save-baseline --tag "main-${GITHUB_SHA}"; then
@@ -138,18 +135,10 @@ jobs:
 
       # For PRs: run benchmarks and check for regressions
       - name: Run performance regression check (PR)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.detect_bench.outputs.bench_found == 'true'
         id: perf_check
         run: |
           echo "🔄 Running performance regression check..."
-
-          # Check if benchmarks exist before running
-          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
-            echo "⚠️  No benchmarks found to run"
-            echo "result=no_benchmarks" >> "$GITHUB_OUTPUT"
-            echo "regression=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           # Set threshold from input or default
           THRESHOLD="${PERF_THRESHOLD_INPUT:-10.0}"
@@ -179,17 +168,10 @@ jobs:
 
       # For manual runs: handle custom options
       - name: Run manual performance analysis
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && steps.detect_bench.outputs.bench_found == 'true'
         run: |
           THRESHOLD="${MANUAL_THRESHOLD_INPUT:-10.0}"
           SAVE_BASELINE="${MANUAL_SAVE_BASELINE_INPUT}"
-
-          # Check if benchmarks exist before running
-          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
-            echo "⚠️  No benchmarks found to run"
-            echo "Ensure you have benchmark configurations in Cargo.toml and benches/ directory"
-            exit 1
-          fi
 
           if [ "$SAVE_BASELINE" = "true" ]; then
             echo "🔄 Saving performance baseline..."
