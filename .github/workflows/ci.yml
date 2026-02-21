@@ -22,7 +22,6 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   ACTIONLINT_VERSION: "1.7.10"
-  MARKDOWNLINT_VERSION: "0.47.0"
   DPRINT_VERSION: "0.51.1"
   SHFMT_VERSION: "3.12.0"
   TYPOS_VERSION: "1.43.5"
@@ -67,17 +66,6 @@ jobs:
         uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7.1.6
         with:
           version: ${{ env.UV_VERSION }}
-
-      - name: Install Node.js (for markdownlint)
-        if: matrix.os != 'windows-latest'
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        with:
-          node-version: "20"
-
-      - name: Install Node.js packages
-        if: matrix.os != 'windows-latest'
-        run: |
-          npm install -g markdownlint-cli@${{ env.MARKDOWNLINT_VERSION }}
 
       - name: Install typos-cli
         if: matrix.os != 'windows-latest'
