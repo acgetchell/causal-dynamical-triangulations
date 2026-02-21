@@ -79,18 +79,11 @@ jobs:
             exit 1
           fi
 
-          # Check for benchmark configuration in Cargo.toml
-          if ! grep -q "\[\[bench\]\]" Cargo.toml; then
-            echo "⚠️  Warning: No benchmark configuration found in Cargo.toml"
+          # Check for benchmark configuration in Cargo.toml and bench files
+          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
+            echo "⚠️  Warning: No benchmark configuration found"
           else
-            echo "✅ Found benchmark configuration in Cargo.toml"
-          fi
-
-          # Validate benchmarks can compile
-          if cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
-            echo "✅ Benchmarks compile successfully"
-          else
-            echo "⚠️  Warning: Benchmarks may not compile properly"
+            echo "✅ Found benchmark configuration in Cargo.toml and benches/"
           fi
 
           # Verify performance analysis script is available
@@ -126,7 +119,7 @@ jobs:
           echo "🔄 Running benchmarks on main branch and saving baseline..."
 
           # Check if benchmarks exist before running
-          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
+          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
             echo "⚠️  No benchmarks found to run"
             echo "Skipping baseline creation"
             exit 0
@@ -151,7 +144,7 @@ jobs:
           echo "🔄 Running performance regression check..."
 
           # Check if benchmarks exist before running
-          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
+          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
             echo "⚠️  No benchmarks found to run"
             echo "result=no_benchmarks" >> "$GITHUB_OUTPUT"
             echo "regression=false" >> "$GITHUB_OUTPUT"
@@ -192,9 +185,9 @@ jobs:
           SAVE_BASELINE="${MANUAL_SAVE_BASELINE_INPUT}"
 
           # Check if benchmarks exist before running
-          if ! cargo bench --no-run 2>&1 | grep -q "Executable benches"; then
+          if ! grep -q "\[\[bench\]\]" Cargo.toml || ! ls benches/*.rs > /dev/null 2>&1; then
             echo "⚠️  No benchmarks found to run"
-            echo "Ensure you have benchmark configurations in Cargo.toml"
+            echo "Ensure you have benchmark configurations in Cargo.toml and benches/ directory"
             exit 1
           fi
 
