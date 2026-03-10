@@ -44,7 +44,7 @@ num-traits = "0.2.19"
 rand = "0.10.0"
 serde = { version = "1.0.228", features = [ "derive" ] }
 thiserror = "2.0.17"
-uuid = { version = "1.19", features = [ "v4" ] }
+uuid = { version = "1.22", features = [ "v4" ] }
 
 [dev-dependencies]
 approx = "0.5.1"
